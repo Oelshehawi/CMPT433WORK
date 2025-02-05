@@ -1,0 +1,8 @@
+{
+  "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+  "files.associations": {
+    "i2c.h": "c",
+    "ioctl.h": "c",
+    "stdlib.h": "c"
+  }
+}
