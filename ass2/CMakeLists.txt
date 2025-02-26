@@ -25,3 +25,8 @@ add_subdirectory(lgpio)
 add_subdirectory(lcd)
 add_subdirectory(hal)  
 add_subdirectory(app)
+
+# Support GPIO
+find_library(GPIOD_LIBRARY gpiod)
+target_link_libraries(light_sampler LINK_PRIVATE gpiod)
+target_link_libraries(hal LINK_PRIVATE gpiod)

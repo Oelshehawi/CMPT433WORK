@@ -36,6 +36,8 @@
 // Sampling configuration
 #define MAX_SAMPLES_PER_SECOND 700
 #define SMOOTHING_FACTOR 0.999 // 99.9% weight for previous average
+#define DIP_THRESHOLD 0.1      // Voltage must drop by 0.1V to count as dip
+#define HYSTERESIS 0.03        // Must rise by 0.07V (0.1 - 0.03) before can trigger again
 
 // Thread and synchronization
 static pthread_t sampling_thread;
@@ -52,6 +54,11 @@ static int history_sample_count = 0;
 static double current_average = 0.0;
 static bool first_sample = true;
 static long long total_samples = 0;
+
+// Timing statistics for the previous second
+static double min_period_ms = 0.0;
+static double max_period_ms = 0.0;
+static double avg_period_ms = 0.0;
 
 // Forward declarations
 static int init_i2c_bus(char *bus, int address);
@@ -134,6 +141,9 @@ static double read_light_value(void)
 
 static void *sampling_thread_function()
 {
+    struct timespec last_sample_time;
+    clock_gettime(CLOCK_MONOTONIC, &last_sample_time);
+
     while (!should_stop)
     {
         // Read sensor and update statistics
@@ -145,7 +155,7 @@ static void *sampling_thread_function()
         // Update total samples count
         total_samples++;
 
-        // Update exponential moving average
+        // Update exponential moving average (99.9% weight for previous average)
         if (first_sample)
         {
             current_average = sample;
@@ -165,8 +175,9 @@ static void *sampling_thread_function()
 
         pthread_mutex_unlock(&data_mutex);
 
-        // Sleep for 1ms between samples
-        usleep(1000);
+        // Sleep for exactly 1ms
+        struct timespec sleep_time = {0, 1000000}; // 1ms = 1,000,000 ns
+        nanosleep(&sleep_time, NULL);
     }
     return NULL;
 }
@@ -266,8 +277,6 @@ long long Sampler_getNumSamplesTaken(void)
 // Returns number of dips detected in the history buffer
 static int analyze_dips(void)
 {
-    const double DIP_THRESHOLD = 0.1; // Voltage must drop by 0.1V to count as dip
-    const double HYSTERESIS = 0.03;   // Must rise by 0.07V (0.1 - 0.03) before can trigger again
     const double RESET_THRESHOLD = DIP_THRESHOLD - HYSTERESIS;
 
     int dip_count = 0;
@@ -309,4 +318,13 @@ static int analyze_dips(void)
 int Sampler_getDips(void)
 {
     return analyze_dips();
+}
+
+void Sampler_getTimingStats(double *min_ms, double *max_ms, double *avg_ms)
+{
+    pthread_mutex_lock(&data_mutex);
+    *min_ms = min_period_ms;
+    *max_ms = max_period_ms;
+    *avg_ms = avg_period_ms;
+    pthread_mutex_unlock(&data_mutex);
 }
