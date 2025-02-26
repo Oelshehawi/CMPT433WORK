@@ -90,11 +90,13 @@ static int init_i2c_bus(char *bus, int address)
 
 static void write_i2c_reg16(int i2c_file_desc, uint8_t reg_addr, uint16_t value)
 {
-    uint8_t buff[3];
+    int tx_size = 1 + sizeof(value);
+    uint8_t buff[tx_size];
     buff[0] = reg_addr;
     buff[1] = (value & 0xFF);
     buff[2] = (value & 0xFF00) >> 8;
-    if (write(i2c_file_desc, buff, 3) != 3)
+    int bytes_written = write(i2c_file_desc, buff, tx_size);
+    if (bytes_written != tx_size)
     {
         perror("Unable to write i2c register");
         exit(EXIT_FAILURE);
@@ -103,14 +105,18 @@ static void write_i2c_reg16(int i2c_file_desc, uint8_t reg_addr, uint16_t value)
 
 static uint16_t read_i2c_reg16(int i2c_file_desc, uint8_t reg_addr)
 {
-    if (write(i2c_file_desc, &reg_addr, 1) != 1)
+    // To read a register, must first write the address
+    int bytes_written = write(i2c_file_desc, &reg_addr, sizeof(reg_addr));
+    if (bytes_written != sizeof(reg_addr))
     {
         perror("Unable to write i2c register.");
         exit(EXIT_FAILURE);
     }
 
+    // Now read the value and return it
     uint16_t value = 0;
-    if (read(i2c_file_desc, &value, 2) != 2)
+    int bytes_read = read(i2c_file_desc, &value, sizeof(value));
+    if (bytes_read != sizeof(value))
     {
         perror("Unable to read i2c register");
         exit(EXIT_FAILURE);
@@ -141,12 +147,10 @@ static double read_light_value(void)
 
 static void *sampling_thread_function()
 {
-    struct timespec last_sample_time;
-    clock_gettime(CLOCK_MONOTONIC, &last_sample_time);
+    struct timespec sleep_time = {0, 1000000}; // 1ms = 1,000,000 ns
 
     while (!should_stop)
     {
-        // Read sensor and update statistics
         double sample = read_light_value();
         Period_markEvent(PERIOD_EVENT_SAMPLE_LIGHT);
 
@@ -175,8 +179,6 @@ static void *sampling_thread_function()
 
         pthread_mutex_unlock(&data_mutex);
 
-        // Sleep for exactly 1ms
-        struct timespec sleep_time = {0, 1000000}; // 1ms = 1,000,000 ns
         nanosleep(&sleep_time, NULL);
     }
     return NULL;

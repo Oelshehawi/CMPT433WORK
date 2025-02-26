@@ -10,7 +10,6 @@
 #include "hal/periodTimer.h"
 #include "hal/pwm_led.h"
 #include "hal/gpio.h"
-#include "hal/btn_statemachine.h"
 #include "hal/rotary_encoder.h"
 #include "lcd_display_impl.h"
 #include "hal/terminal_display.h"
@@ -58,7 +57,6 @@ int main()
     PwmLed_init();
     LcdDisplayImpl_init();
     TerminalDisplay_init();
-    BtnStateMachine_init();
     RotaryEncoder_init();
 
     // Main loop: Process rotary encoder and update LCD
@@ -95,7 +93,6 @@ int main()
 
     // Cleanup all modules (HAL modules last)
     RotaryEncoder_cleanup();
-    BtnStateMachine_cleanup();
     TerminalDisplay_cleanup();
     LcdDisplayImpl_cleanup();
     PwmLed_cleanup();

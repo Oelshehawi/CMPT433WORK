@@ -151,11 +151,9 @@ static void *encoder_thread_function()
 
 void RotaryEncoder_init(void)
 {
-    printf("Rotary Encoder - Initializing\n");
     assert(!is_initialized);
 
     // Open GPIO lines for rotary encoder
-    printf("Rotary: Opening GPIO line A (chip %d, line %d)\n", GPIO_CHIP, GPIO_LINE_A);
     s_lineA = Gpio_openForEvents(GPIO_CHIP, GPIO_LINE_A);
     if (!s_lineA)
     {
@@ -163,7 +161,6 @@ void RotaryEncoder_init(void)
         exit(1);
     }
 
-    printf("Rotary: Opening GPIO line B (chip %d, line %d)\n", GPIO_CHIP, GPIO_LINE_B);
     s_lineB = Gpio_openForEvents(GPIO_CHIP, GPIO_LINE_B);
     if (!s_lineB)
     {
@@ -183,12 +180,10 @@ void RotaryEncoder_init(void)
     }
 
     is_initialized = true;
-    printf("Rotary Encoder - Initialization complete\n");
 }
 
 void RotaryEncoder_cleanup(void)
 {
-    printf("Rotary Encoder - Cleanup\n");
     if (!is_initialized)
         return;
 
@@ -208,7 +203,6 @@ void RotaryEncoder_cleanup(void)
     }
 
     is_initialized = false;
-    printf("Rotary Encoder - Cleanup complete\n");
 }
 
 int RotaryEncoder_process(void)
