@@ -68,12 +68,12 @@ void LcdDisplayImpl_update(char *message)
     int x = 5;
     int y = 5;
     int line_count = 0;
-    char line[100]; // Buffer for each line
+    char line[100]; 
     const char *current = message;
 
     while (*current != '\0' && line_count < 10)
-    { // Limit to 10 lines for safety
-        // Copy characters until newline or end of string
+    { 
+     
         int i = 0;
         while (current[i] != '\n' && current[i] != '\0' && i < 99)
         {
@@ -82,11 +82,8 @@ void LcdDisplayImpl_update(char *message)
         }
         line[i] = '\0'; // Null terminate the line
 
-
-        // Use larger font for title, smaller for data
         if (line_count == 0)
         {
-            // Title (your name) - larger font
             Paint_DrawString_EN(x, y, line, &Font20, BLACK, WHITE);
             y += 30; // More space after title
         }
