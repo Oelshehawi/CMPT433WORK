@@ -126,22 +126,17 @@ static uint16_t read_i2c_reg16(int i2c_file_desc, uint8_t reg_addr)
 
 static double convert_to_voltage(uint16_t raw_value)
 {
-    // Simple conversion: (3.3V / 4096) * ADC_value
     return (ADC_VREF / ADC_MAX_VALUE) * raw_value;
 }
 
 static double read_light_value(void)
 {
-    // Read raw value (LSB first)
     uint16_t raw_read = read_i2c_reg16(i2c_file_desc, REG_DATA);
 
-    // Convert from LSB first to MSB first
     uint16_t value = ((raw_read & 0xFF) << 8) | ((raw_read & 0xFF00) >> 8);
 
-    // Right align the 12-bit value
     value = value >> 4;
 
-    // Convert to voltage
     return convert_to_voltage(value);
 }
 
