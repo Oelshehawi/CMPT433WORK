@@ -6,11 +6,10 @@
 #include <assert.h>
 #include <pthread.h>
 
-// Pin config info for newer board:
-// Try GPIO16 and GPIO17 on gpiochip2
-#define GPIO_CHIP GPIO_CHIP_2 // Changed to gpiochip2
-#define GPIO_LINE_A 7         // GPIO16 is on line 7
-#define GPIO_LINE_B 8         // GPIO17 is on line 8
+
+#define GPIO_CHIP GPIO_CHIP_2 
+#define GPIO_LINE_A 7       
+#define GPIO_LINE_B 8        
 
 static bool is_initialized = false;
 static struct GpioLine *s_lineA = NULL;
