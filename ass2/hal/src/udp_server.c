@@ -23,7 +23,6 @@ static bool is_initialized = false;
 static char last_command[MAX_COMMAND_SIZE] = "";
 static int sockfd = -1;
 
-// Forward declarations
 static void *server_thread_function();
 static void handle_command(const char *command, struct sockaddr_in *client_addr);
 static void send_response(const char *response, struct sockaddr_in *client_addr);

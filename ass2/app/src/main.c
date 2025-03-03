@@ -1,6 +1,5 @@
 // Main program to build the application
-// Has main(); does initialization and cleanup and perhaps some basic logic.
-
+// Has main(); does initialization and cleanup
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -15,7 +14,7 @@
 #include "hal/terminal_display.h"
 
 #define MAX_LCD_MESSAGE 1024 // Increased buffer size like example
-#define NAME "Omar E"
+#define NAME "Omar n Wes"
 #define MAX_FREQUENCY 500.0
 
 static void process_rotary(void)
@@ -69,7 +68,7 @@ int main()
     while (!UdpServer_shouldStop())
     {
 
-        // Process rotary encoder (now non-blocking)
+        // Process rotary encoder 
         process_rotary();
 
         // Get statistics and update display
