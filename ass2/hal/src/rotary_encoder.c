@@ -1,10 +1,12 @@
 #include "hal/rotary_encoder.h"
 #include "hal/gpio.h"
+#include "hal/udp_server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <pthread.h>
+#include <unistd.h>
 
 // Pin config info for newer board:
 // Try GPIO16 and GPIO17 on gpiochip2
@@ -92,19 +94,46 @@ static struct state *pCurrentState = &states[0];
 
 static void *encoder_thread_function()
 {
-    while (keep_running)
+    struct timespec timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_nsec = 100000000; // 100ms timeout
+
+    while (keep_running && !UdpServer_shouldStop())
     {
+        // Check stop conditions before accessing GPIO
+        if (!keep_running || UdpServer_shouldStop())
+        {
+            break;
+        }
+
         struct gpiod_line_bulk bulkEvents;
         struct gpiod_line_bulk bulk;
         gpiod_line_bulk_init(&bulk);
+
+        // Check stop conditions before continuing
+        if (!keep_running || UdpServer_shouldStop())
+        {
+            break;
+        }
+
         gpiod_line_bulk_add(&bulk, (struct gpiod_line *)s_lineA);
         gpiod_line_bulk_add(&bulk, (struct gpiod_line *)s_lineB);
 
         // Request both edges events for both lines
         gpiod_line_request_bulk_both_edges_events(&bulk, "Rotary Events");
 
-        // Wait for events on either line
-        int result = gpiod_line_event_wait_bulk(&bulk, NULL, &bulkEvents);
+        // Use timeout to avoid blocking forever during shutdown
+        int result = gpiod_line_event_wait_bulk(&bulk, &timeout, &bulkEvents);
+
+        // Check if we should exit
+        if (!keep_running || UdpServer_shouldStop())
+        {
+            // Release any bulk events properly before exiting
+            gpiod_line_release((struct gpiod_line *)s_lineA);
+            gpiod_line_release((struct gpiod_line *)s_lineB);
+            break;
+        }
+
         if (result <= 0)
         {
             continue;
@@ -115,6 +144,12 @@ static void *encoder_thread_function()
         // Process each event
         for (int i = 0; i < numEvents; i++)
         {
+            // Check stop conditions before processing each event
+            if (!keep_running || UdpServer_shouldStop())
+            {
+                break;
+            }
+
             struct gpiod_line *line = gpiod_line_bulk_get_line(&bulkEvents, i);
             unsigned int line_number = gpiod_line_offset(line);
 
@@ -146,6 +181,13 @@ static void *encoder_thread_function()
             pCurrentState = pStateEvent->pNextState;
         }
     }
+
+    // If UDP server requested stop, update our flag too
+    if (UdpServer_shouldStop())
+    {
+        keep_running = false;
+    }
+
     return NULL;
 }
 
@@ -189,7 +231,12 @@ void RotaryEncoder_cleanup(void)
 
     // Stop the thread
     keep_running = false;
+
+    usleep(200000); // 200ms
+
+    // Join the thread to ensure it's fully stopped
     pthread_join(encoder_thread, NULL);
+    printf("Rotary Encoder - Thread joined\n");
 
     if (s_lineA)
     {
@@ -203,6 +250,7 @@ void RotaryEncoder_cleanup(void)
     }
 
     is_initialized = false;
+    printf("Rotary Encoder - Cleanup complete\n");
 }
 
 int RotaryEncoder_process(void)

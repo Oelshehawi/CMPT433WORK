@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <string.h>
 
-#define NAME "Omar E"
+#define NAME "Omar n Wes"
 #define MAX_MESSAGE_LENGTH 100
 
 static UWORD *s_fb;

@@ -111,12 +111,21 @@ void PwmLed_cleanup(void)
 
 void PwmLed_setFrequency(double freq_hz)
 {
-    if (!is_initialized || freq_hz < 0)
+    if (!is_initialized)
         return;
 
     // Limit frequency to valid range (0 to 1000Hz)
     if (freq_hz > 1000)
         freq_hz = 1000;
+
+    // For frequencies below 3Hz, turn off the LED
+    if (freq_hz < 3.0)
+    {
+        // Turn off PWM by setting duty cycle to 0
+        write_pwm_value(fd_duty, 0);
+        current_frequency = freq_hz;
+        return;
+    }
 
     // Convert frequency to period in nanoseconds
     long period_ns = (freq_hz > 0) ? (1000000000 / freq_hz) : MAX_PERIOD_NS;
@@ -130,10 +139,13 @@ void PwmLed_setFrequency(double freq_hz)
     // Set 50% duty cycle
     long duty_ns = period_ns / 2;
 
-    // Update PWM values
-    set_pwm_values(period_ns, duty_ns);
-
-    current_frequency = freq_hz;
+    // Only update if frequency changed to avoid interruption
+    if (freq_hz != current_frequency)
+    {
+        // Update PWM values
+        set_pwm_values(period_ns, duty_ns);
+        current_frequency = freq_hz;
+    }
 }
 
 double PwmLed_getFrequency(void)

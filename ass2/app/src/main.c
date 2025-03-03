@@ -20,6 +20,12 @@
 
 static void process_rotary(void)
 {
+    // Skip processing if stopping
+    if (UdpServer_shouldStop())
+    {
+        return;
+    }
+
     int direction = RotaryEncoder_process();
     if (direction != 0)
     {
@@ -85,22 +91,35 @@ int main()
 
         LcdDisplayImpl_update(buff);
 
-        // Move samples to history for next update
-        Sampler_moveCurrentDataToHistory();
-
+        // Sleep for exactly 1 second
         sleep(1);
     }
 
-    // Cleanup all modules (HAL modules last)
+    printf("Starting cleanup...\n");
+
     RotaryEncoder_cleanup();
+
+    printf("Stopping terminal display...\n");
     TerminalDisplay_cleanup();
+
+    printf("Stopping LCD display...\n");
     LcdDisplayImpl_cleanup();
+
+    printf("Stopping PWM LED...\n");
     PwmLed_cleanup();
+
+    printf("Stopping UDP server...\n");
     UdpServer_cleanup();
+
+    printf("Stopping sampler...\n");
     Sampler_cleanup();
+
+    printf("Stopping period timer...\n");
     Period_cleanup();
+
+    printf("Stopping GPIO...\n");
     Gpio_cleanup();
 
-    printf("Program terminated.\n");
+    printf("Cleanup complete. Program terminated.\n");
     return 0;
 }

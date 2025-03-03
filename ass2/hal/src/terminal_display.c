@@ -9,6 +9,7 @@
 #include "hal/sampler.h"
 #include "hal/periodTimer.h"
 #include "hal/pwm_led.h"
+#include "hal/udp_server.h"
 
 static pthread_t display_thread;
 static volatile bool should_stop = false;
@@ -54,7 +55,7 @@ static void print_display_line(void)
 
 static void *display_thread_function()
 {
-    while (!should_stop)
+    while (!should_stop && !UdpServer_shouldStop())
     {
         // Print display lines
         print_display_line();
@@ -65,6 +66,13 @@ static void *display_thread_function()
         // Sleep for exactly 1 second
         sleep(1);
     }
+
+    // If UDP server requested stop, set our flag too
+    if (UdpServer_shouldStop())
+    {
+        should_stop = true;
+    }
+
     return NULL;
 }
 
