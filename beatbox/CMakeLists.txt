@@ -15,4 +15,10 @@ add_link_options(-fsanitize=address)
 # What folders to build
 add_subdirectory(hal)  
 add_subdirectory(app)
+add_subdirectory(lcd)
+add_subdirectory(lgpio)
 
+# Support GPIO
+find_library(GPIOD_LIBRARY gpiod)
+target_link_libraries(beatbox LINK_PRIVATE gpiod)
+target_link_libraries(hal LINK_PRIVATE gpiod)

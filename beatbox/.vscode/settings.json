@@ -1,5 +1,6 @@
 {
   "files.associations": {
-    "interval_timer.h": "c"
+    "interval_timer.h": "c",
+    "displaymanager.h": "c"
   }
 }
