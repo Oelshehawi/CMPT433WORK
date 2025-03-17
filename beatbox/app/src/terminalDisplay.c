@@ -103,6 +103,8 @@ void TerminalDisplay_init(void)
     // Create display thread
     isRunning = true;
     pthread_create(&displayThreadId, NULL, displayThread, NULL);
+
+    printf("Terminal display initialized\n");
 }
 
 void TerminalDisplay_cleanup(void)

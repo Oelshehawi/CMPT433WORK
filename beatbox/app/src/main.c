@@ -12,6 +12,7 @@
 #include "periodTimer.h"
 #include "inputHandler.h"
 #include "displayManager.h"
+#include "udpServer.h"
 
 // Flag to indicate if the application should continue running
 volatile bool isRunning = true;
@@ -34,32 +35,14 @@ int main(void)
     signal(SIGINT, sigHandler);
     signal(SIGTERM, sigHandler);
 
-    // Initialize Period module first (for timing statistics)
     Period_init();
-
-    // Initialize audio mixer
     AudioMixer_init();
-    printf("Audio mixer initialized\n");
-
-    // Initialize drum sounds
     DrumSounds_init();
-    printf("Drum sounds initialized\n");
-
-    // Initialize beat player
     BeatPlayer_init();
-    printf("Beat player initialized\n");
-
-    // Initialize display manager first (LCD)
     DisplayManager_init();
-    printf("Display initialized\n");
-
-    // Initialize input handler
     InputHandler_init();
-    printf("Input handler initialized\n");
-
-    // Initialize terminal display last (after LCD is fully initialized)
     TerminalDisplay_init();
-    printf("Terminal display initialized\n");
+    UdpServer_init();
 
     // Default mode and settings
     BeatPlayer_setMode(BEAT_MODE_ROCK);
@@ -77,6 +60,14 @@ int main(void)
     // Main loop
     while (isRunning)
     {
+        // Check if UDP server requested shutdown
+        if (UdpServer_shouldStop())
+        {
+            printf("Shutdown requested via UDP\n");
+            isRunning = false;
+            break;
+        }
+
         // Get current time
         struct timespec currentTime;
         clock_gettime(CLOCK_MONOTONIC, &currentTime);
@@ -85,8 +76,6 @@ int main(void)
         long elapsedMs = (currentTime.tv_sec - lastUpdateTime.tv_sec) * 1000 +
                          (currentTime.tv_nsec - lastUpdateTime.tv_nsec) / 1000000;
 
-        // Process joystick input much more frequently (every ~50ms)
-        // This makes volume control much more responsive
         InputHandler_processJoystick();
 
         // Update display every second
@@ -99,12 +88,13 @@ int main(void)
             lastUpdateTime = currentTime;
         }
 
-        usleep(50000); // 50ms sleep - increased from 10ms
+        usleep(50000); // 50ms sleep
     }
 
     // Cleanup
     printf("Cleaning up...\n");
 
+    UdpServer_cleanup();
     InputHandler_cleanup();
     DisplayManager_cleanup();
     TerminalDisplay_cleanup();

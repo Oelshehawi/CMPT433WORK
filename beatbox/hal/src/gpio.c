@@ -43,6 +43,7 @@ void Gpio_initialize(void)
         }
     }
     s_isInitialized = true;
+    printf("GPIO initialized successfully\n");
 }
 
 void Gpio_cleanup(void)

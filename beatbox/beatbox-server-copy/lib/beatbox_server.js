@@ -71,7 +71,7 @@ function relayToLocalPort(socket, data, replyCommandName) {
 	
 	// Info for connecting to the local process via UDP
 	var PORT = 12345;	// Port of local application
-	var HOST = '127.0.0.1';
+	var HOST = '192.168.7.2';
 	var buffer = new Buffer(data);
 
 	// Send an error if we have not got a reply in a second

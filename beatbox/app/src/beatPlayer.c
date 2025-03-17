@@ -37,6 +37,8 @@ void BeatPlayer_init(void)
     isRunning = false;
     threadCreated = false;
     pthread_mutex_unlock(&beatMutex);
+
+    printf("Beat player initialized\n");
 }
 
 // Start playing the beat

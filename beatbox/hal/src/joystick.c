@@ -29,7 +29,8 @@
 #define DOWN_THRESHOLD 1500 // X axis - above this is DOWN
 
 // Debounce timeout in milliseconds
-#define DEBOUNCE_TIMEOUT_MS 50 // Reduced for immediate response
+#define DIRECTION_DEBOUNCE_MS 50 // Debounce for joystick direction
+#define BUTTON_DEBOUNCE_MS 20    // Shorter debounce for button to improve responsiveness
 
 // Joystick state information
 static pthread_t joystickThreadId;
@@ -151,26 +152,11 @@ static bool read_raw_button_press(void)
 {
     if (button_gpio == NULL)
     {
-        // Debug printing only if null
-        static int null_counter = 0;
-        if (++null_counter % 100 == 0)
-        {
-            printf("Joystick button GPIO not initialized\n");
-        }
         return false;
     }
 
     // Read GPIO value
     int value = Gpio_getValue(button_gpio);
-
-    // Debug printing - show GPIO values to troubleshoot button press
-    static int counter = 0;
-    if (++counter % 50 == 0)
-    { // Print every 50 calls to avoid flooding the console
-        printf("Joystick button GPIO value: %d (button %s)\n",
-               value,
-               (value == 0) ? "PRESSED" : "NOT PRESSED");
-    }
 
     // Return true if button is pressed (active-low: 0 = pressed)
     return (value == 0);
@@ -197,7 +183,7 @@ static void *joystickSamplingThread()
         // Handle direction debouncing
         if (rawDirection != currentDirection)
         {
-            if (get_time_diff_ms(&lastDirectionChange, &currentTime) > DEBOUNCE_TIMEOUT_MS)
+            if (get_time_diff_ms(&lastDirectionChange, &currentTime) > DIRECTION_DEBOUNCE_MS)
             {
                 currentDirection = rawDirection;
                 lastDirectionChange = currentTime;
@@ -207,7 +193,7 @@ static void *joystickSamplingThread()
         // Handle button press debouncing
         if (rawButtonPress != buttonPressed)
         {
-            if (get_time_diff_ms(&lastButtonChange, &currentTime) > DEBOUNCE_TIMEOUT_MS)
+            if (get_time_diff_ms(&lastButtonChange, &currentTime) > BUTTON_DEBOUNCE_MS)
             {
                 buttonPressed = rawButtonPress;
                 lastButtonChange = currentTime;
@@ -241,7 +227,7 @@ void Joystick_init(void)
     {
         printf("Joystick button GPIO initialization failed - GPIO%d might be in use by another process\n",
                JOYSTICK_BUTTON_PIN);
-        // Continue without button functionality
+        printf("Continuing without button functionality\n");
     }
     else
     {
@@ -251,6 +237,8 @@ void Joystick_init(void)
     // Initialize the debouncing timestamps
     get_current_time(&lastDirectionChange);
     get_current_time(&lastButtonChange);
+
+    printf("Joystick initialized\n");
 }
 
 void Joystick_cleanup(void)

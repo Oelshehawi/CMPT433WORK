@@ -184,70 +184,31 @@ void LcdDisplay_updateAccelTiming(double min, double max, double avg)
 // Render the status screen
 static void render_status_screen(void)
 {
-    // Format the message for status screen
-    char message[256];
-    snprintf(message, sizeof(message),
-             "BeatBox\n"
-             "%s\n"
-             "Vol: %d\n"
-             "BPM: %d",
-             beatName,
-             currentVolume,
-             currentBpm);
+    // Draw the title - move it down from top (was 5)
+    Paint_DrawString_EN(5, 25, "BeatBox - Status", &Font20, BLACK, WHITE);
 
-    // Draw each line
-    int x = 5;
-    int y = 5;
-    int line_count = 0;
-    char line[100]; // Buffer for each line
-    const char *current = message;
+    // Center and draw beat name with larger font
+    int center_x = (LCD_1IN54_WIDTH - strlen(beatName) * 16) / 2;
+    if (center_x < 0)
+        center_x = 5;
+    Paint_DrawString_EN(center_x, 65, beatName, &Font24, BLACK, WHITE);
 
-    while (*current != '\0' && line_count < 10)
-    {
-        // Copy characters until newline or end of string
-        int i = 0;
-        while (current[i] != '\n' && current[i] != '\0' && i < 99)
-        {
-            line[i] = current[i];
-            i++;
-        }
-        line[i] = '\0'; // Null terminate the line
+    // Format volume and BPM strings
+    char volumeStr[20], bpmStr[20];
+    snprintf(volumeStr, sizeof(volumeStr), "Vol: %d", currentVolume);
+    snprintf(bpmStr, sizeof(bpmStr), "BPM: %d", currentBpm);
 
-        // Use larger font for title, smaller for data
-        if (line_count == 0)
-        {
-            // Title - larger font
-            Paint_DrawString_EN(x, y, line, &Font20, BLACK, WHITE);
-            y += 30; // More space after title
-        }
-        else if (line_count == 1)
-        {
-            // Beat name - large and centered
-            int center_x = (LCD_1IN54_WIDTH - strlen(line) * 16) / 2;
-            if (center_x < 0)
-                center_x = 5;
-            Paint_DrawString_EN(center_x, y + 20, line, &Font24, BLACK, WHITE);
-            y += 60; // More space for the important beat name
-        }
-        else
-        {
-            // Regular text - smaller font
-            Paint_DrawString_EN(x, y, line, &Font16, BLACK, WHITE);
-            y += 25; // Space between lines
-        }
+    // Draw volume in bottom left
+    Paint_DrawString_EN(5, LCD_1IN54_HEIGHT - 30, volumeStr, &Font16, BLACK, WHITE);
 
-        line_count++;
+    // Draw BPM in bottom right
+    int bpm_width = strlen(bpmStr) * 10; // Wider character width estimate
+    int bpm_x = LCD_1IN54_WIDTH - bpm_width - 10;
 
-        // Move to next line if we hit a newline
-        if (current[i] == '\n')
-        {
-            current += i + 1;
-        }
-        else
-        {
-            current += i;
-        }
-    }
+    if (bpm_x < LCD_1IN54_WIDTH / 2 + 10)
+        bpm_x = LCD_1IN54_WIDTH / 2 + 10;
+
+    Paint_DrawString_EN(bpm_x, LCD_1IN54_HEIGHT - 30, bpmStr, &Font16, BLACK, WHITE);
 }
 
 // Render the audio timing screen
