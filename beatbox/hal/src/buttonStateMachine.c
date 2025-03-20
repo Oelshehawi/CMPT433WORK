@@ -1,8 +1,7 @@
-// Sample state machine for one GPIO pin.
+// State machine for handling rotary encoder button press
 
 #include "hal/buttonStateMachine.h"
 #include "hal/gpio.h"
-#include "../include/hal/rotaryEncoder.h" // For direct access to beat modes
 #include "../../app/include/beatPlayer.h" // For directly updating the beat player mode
 
 #include <assert.h>
@@ -11,8 +10,6 @@
 #include <stdatomic.h>
 
 // Pin config info: GPIO 24 (Rotary Encoder PUSH)
-//   $ gpiofind GPIO24
-//   >> gpiochip0 10
 #define GPIO_CHIP GPIO_CHIP_0
 #define GPIO_LINE_NUMBER 10
 
@@ -107,7 +104,6 @@ struct state *pCurrentState = &states[0];
 
 void BtnStateMachine_init()
 {
-    printf("Initializing Button State Machine...\n");
     assert(!isInitialized);
     s_lineBtn = Gpio_openForEvents(GPIO_CHIP, GPIO_LINE_NUMBER);
     if (!s_lineBtn)
@@ -117,16 +113,13 @@ void BtnStateMachine_init()
     }
     isInitialized = true;
     lastButtonPressTime = getCurrentTimeMs(); // Initialize time
-    printf("Button State Machine initialized successfully\n");
 }
 
 void BtnStateMachine_cleanup()
 {
-    printf("Cleaning up Button State Machine...\n");
     assert(isInitialized);
     isInitialized = false;
     Gpio_close(s_lineBtn);
-    printf("Button State Machine cleanup complete\n");
 }
 
 int BtnStateMachine_getValue()
@@ -148,7 +141,7 @@ void BtnStateMachine_doState()
     struct gpiod_line_bulk bulkEvents;
     int numEvents = Gpio_waitForLineChange(s_lineBtn, &bulkEvents);
 
-    // Iterate over the event
+    // Iterate over the events
     for (int i = 0; i < numEvents; i++)
     {
         // Get the line handle for this event
@@ -168,7 +161,7 @@ void BtnStateMachine_doState()
         // Run the state machine
         bool isRising = event.event_type == GPIOD_LINE_EVENT_RISING_EDGE;
 
-        // Can check with line it is, if you have more than one...
+        // Can check which line it is, if you have more than one...
         bool isBtn = this_line_number == GPIO_LINE_NUMBER;
         assert(isBtn);
 

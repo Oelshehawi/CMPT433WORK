@@ -1,6 +1,7 @@
 #include "udpServer.h"
 #include "beatPlayer.h"
 #include "hal/audioMixer.h"
+#include "hal/rotaryEncoder.h"
 #include "drumSounds.h"
 
 #include <stdio.h>
@@ -184,6 +185,7 @@ static void processCommand(const char *command, struct sockaddr_in *clientAddr, 
             if (mode >= 0 && mode <= 2)
             {
                 BeatPlayer_setMode(mode);
+                // Just sync the beatPlayer mode; the rotary encoder will get updated via main.c
             }
         }
         // Always respond with current mode for both queries and settings
@@ -214,6 +216,8 @@ static void processCommand(const char *command, struct sockaddr_in *clientAddr, 
             if (tempo >= 40 && tempo <= 300)
             {
                 BeatPlayer_setTempo(tempo);
+                // Also update the rotary encoder to maintain consistency
+                RotaryEncoder_setBPM(tempo);
             }
         }
         // Always respond with current tempo for both queries and settings
@@ -308,7 +312,6 @@ static void *serverThread(void *arg)
         socketFd = -1;
         return NULL;
     }
-
 
     // Main receive loop
     while (isRunning)

@@ -47,6 +47,9 @@ int main(void)
     signal(SIGINT, sigHandler);
     signal(SIGTERM, sigHandler);
 
+    // For tracking mode changes
+    BeatMode_t lastEncoderMode = BEAT_MODE_ROCK;
+
     // Initialize components in correct order
     Gpio_initialize();
     Period_init();
@@ -89,6 +92,13 @@ int main(void)
         {
             printf("Shutdown requested via UDP\n");
             isRunning = false;
+
+            // Tell the terminal display to stop, just like we do for Ctrl+C
+            TerminalDisplay_registerShutdown(&isRunning);
+
+            // Give a short delay to allow threads to notice the flag change
+            usleep(100000); // 100ms
+
             break;
         }
 
@@ -100,9 +110,28 @@ int main(void)
         long elapsedMs = (currentTime.tv_sec - lastUpdateTime.tv_sec) * 1000 +
                          (currentTime.tv_nsec - lastUpdateTime.tv_nsec) / 1000000;
 
-        // Update beat mode from rotary encoder
+        // Get current modes for both systems
         BeatMode_t encoderMode = RotaryEncoder_getBeatMode();
-        BeatPlayer_setMode(encoderMode);
+        BeatMode_t playerMode = BeatPlayer_getMode();
+
+        // Bidirectional synchronization of modes
+        if (encoderMode != playerMode)
+        {
+            if (encoderMode != lastEncoderMode)
+            {
+                // Encoder was changed, update player
+                BeatPlayer_setMode(encoderMode);
+            }
+            else
+            {
+                // Player was changed (likely via UDP), update encoder
+                extern BeatMode_t currentBeatMode; // From rotaryEncoder.c
+                currentBeatMode = playerMode;
+            }
+        }
+
+        // Remember last encoder mode for detecting changes
+        lastEncoderMode = encoderMode;
 
         // Update BPM from rotary encoder
         int encoderBPM = RotaryEncoder_getBPM();

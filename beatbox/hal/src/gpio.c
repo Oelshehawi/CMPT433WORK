@@ -68,7 +68,6 @@ void Gpio_cleanup(void)
 struct GpioLine *Gpio_openForEvents(enum eGpioChips chip, int pinNumber)
 {
     assert(s_isInitialized);
-    printf("DEBUG: Opening GPIO line for events: chip %d, pin %d\n", chip, pinNumber);
 
     struct gpiod_chip *gpiodChip = s_openGpiodChips[chip];
     struct gpiod_line *line = gpiod_chip_get_line(gpiodChip, pinNumber);
@@ -85,7 +84,6 @@ struct GpioLine *Gpio_openForEvents(enum eGpioChips chip, int pinNumber)
         return NULL;
     }
 
-    printf("DEBUG: Successfully opened GPIO line: chip %d, pin %d\n", chip, pinNumber);
     return (struct GpioLine *)line;
 }
 

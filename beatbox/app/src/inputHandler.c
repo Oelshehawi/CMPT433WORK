@@ -17,9 +17,10 @@ static int directionChangeCooldown = 0; // Cooldown counter for debouncing direc
 
 // Timing constants for press vs hold distinction
 #define INITIAL_DELAY_COUNT 100       // Initial delay before continuous adjustment (100ms)
-#define CONTINUOUS_RATE 2            // Adjust volume every N cycles when holding
-#define VOLUME_CHANGE_AMOUNT 5       // Standard volume change amount
-#define DIRECTION_CHANGE_COOLDOWN 100 // Cooldown period after direction change (200ms)
+#define CONTINUOUS_RATE 10            // Adjust volume every N cycles when holding (slower)
+#define VOLUME_CHANGE_AMOUNT 5        // Standard volume change amount for initial press
+#define HOLD_VOLUME_CHANGE_AMOUNT 1   // Smaller volume change when holding
+#define DIRECTION_CHANGE_COOLDOWN 100 // Cooldown period after direction change (100ms)
 
 // Threading variables
 static pthread_t joystick_thread;
@@ -59,6 +60,7 @@ static void *joystick_thread_function(void *arg)
             // 1. Direction has just changed AND we're not in cooldown
             // 2. User is holding the joystick in a direction
             bool shouldChangeVolume = false;
+            bool isHolding = false;
 
             if (directionChanged && directionChangeCooldown == 0)
             {
@@ -72,16 +74,19 @@ static void *joystick_thread_function(void *arg)
             {
                 // Case 2: Holding joystick in a direction
                 shouldChangeVolume = true;
+                isHolding = true;
             }
 
             if (shouldChangeVolume)
             {
                 int currentVolume = AudioMixer_getVolume();
                 int newVolume = currentVolume;
+                // Use smaller change amount for holding
+                int changeAmount = isHolding ? HOLD_VOLUME_CHANGE_AMOUNT : VOLUME_CHANGE_AMOUNT;
 
                 if (direction == JOYSTICK_UP)
                 {
-                    newVolume = currentVolume + VOLUME_CHANGE_AMOUNT;
+                    newVolume = currentVolume + changeAmount;
                     if (newVolume > AUDIOMIXER_MAX_VOLUME)
                     {
                         newVolume = AUDIOMIXER_MAX_VOLUME;
@@ -89,7 +94,7 @@ static void *joystick_thread_function(void *arg)
                 }
                 else if (direction == JOYSTICK_DOWN)
                 {
-                    newVolume = currentVolume - VOLUME_CHANGE_AMOUNT;
+                    newVolume = currentVolume - changeAmount;
                     if (newVolume < 0)
                     {
                         newVolume = 0;

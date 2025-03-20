@@ -52,7 +52,6 @@ static long getCurrentTimeMs()
 static void *encoder_rotation_thread_function(void *arg)
 {
     (void)arg; // Prevent unused parameter warning
-    printf("Encoder rotation thread started\n");
 
     // Create the event monitoring structures
     struct gpiod_line_bulk encoderBulk;
@@ -166,7 +165,6 @@ static void *encoder_rotation_thread_function(void *arg)
         }
     }
 
-    printf("Encoder rotation thread stopped\n");
     return NULL;
 }
 
@@ -174,7 +172,6 @@ static void *encoder_rotation_thread_function(void *arg)
 static void *button_thread_function(void *arg)
 {
     (void)arg; // Prevent unused parameter warning
-    printf("Button thread started\n");
 
     // Let the buttonStateMachine handle the button presses separately
     while (keep_running)
@@ -186,15 +183,12 @@ static void *button_thread_function(void *arg)
         usleep(5000); // 5ms
     }
 
-    printf("Button thread stopped\n");
     return NULL;
 }
 
 void RotaryEncoder_init(void)
 {
     assert(!is_initialized);
-
-    printf("Initializing Rotary Encoder...\n");
 
     // Set up GPIO for the rotary encoder CLK and DT pins
     clk_gpio = Gpio_openForEvents(CLK_GPIO_CHIP, CLK_GPIO_LINE);
@@ -227,15 +221,12 @@ void RotaryEncoder_init(void)
     }
 
     is_initialized = true;
-    printf("Rotary Encoder initialization complete\n");
 }
 
 void RotaryEncoder_cleanup(void)
 {
     if (!is_initialized)
         return;
-
-    printf("Starting Rotary Encoder cleanup...\n");
 
     // Stop the threads
     keep_running = false;
@@ -246,7 +237,6 @@ void RotaryEncoder_cleanup(void)
     // Join the threads to ensure they're fully stopped
     pthread_join(encoder_thread, NULL);
     pthread_join(button_thread, NULL);
-    printf("Rotary Encoder - Threads joined successfully\n");
 
     // Close GPIO resources
     if (clk_gpio != NULL)
@@ -262,7 +252,6 @@ void RotaryEncoder_cleanup(void)
     }
 
     is_initialized = false;
-    printf("Rotary Encoder - Cleanup complete\n");
 }
 
 int RotaryEncoder_process(void)
