@@ -16,11 +16,18 @@
 
 // Thread variables
 static pthread_t displayThreadId;
-static bool isRunning = false;
+static volatile bool isRunning = false;      // Make volatile for visibility between threads
+static volatile bool isShuttingDown = false; // Additional flag for app-wide shutdown
 
 // Private function declarations
 static void *displayThread(void *arg);
 static void updateConsoleOutput(void);
+
+// Register with the app-wide shutdown flag
+void TerminalDisplay_registerShutdown(volatile bool *appIsRunning)
+{
+    isShuttingDown = !(*appIsRunning);
+}
 
 // Display thread function
 static void *displayThread(void *arg)
@@ -32,7 +39,7 @@ static void *displayThread(void *arg)
     struct timespec lastConsoleUpdate;
     clock_gettime(CLOCK_MONOTONIC, &lastConsoleUpdate);
 
-    while (isRunning)
+    while (isRunning && !isShuttingDown)
     {
         // Get current time
         struct timespec currentTime;
@@ -56,12 +63,19 @@ static void *displayThread(void *arg)
     // Clean up
     Period_cleanup();
 
+    printf("Terminal display thread exited\n");
     return NULL;
 }
 
 // Update the console with periodic statistics
 static void updateConsoleOutput(void)
 {
+    // Check for shutdown again before printing anything
+    if (isShuttingDown)
+    {
+        return;
+    }
+
     // Get audio statistics
     Period_statistics_t audioStats;
     Period_getStatisticsAndClear(PERIOD_EVENT_AUDIO, &audioStats);
@@ -102,6 +116,7 @@ void TerminalDisplay_init(void)
 {
     // Create display thread
     isRunning = true;
+    isShuttingDown = false;
     pthread_create(&displayThreadId, NULL, displayThread, NULL);
 
     printf("Terminal display initialized\n");
@@ -109,12 +124,30 @@ void TerminalDisplay_init(void)
 
 void TerminalDisplay_cleanup(void)
 {
+    printf("Terminal display cleanup starting...\n");
+
     // Stop display thread
     if (isRunning)
     {
         isRunning = false;
-        pthread_join(displayThreadId, NULL);
+        isShuttingDown = true;
+
+        // Give thread a chance to notice the shutdown
+        usleep(50000); // 50ms
+
+        // Join with standard pthread_join
+        int join_result = pthread_join(displayThreadId, NULL);
+        if (join_result != 0)
+        {
+            printf("WARNING: Terminal display thread join failed\n");
+        }
+        else
+        {
+            printf("Terminal display thread joined successfully\n");
+        }
     }
+
+    printf("Terminal display cleanup complete\n");
 }
 
 void TerminalDisplay_markAudioEvent(void)

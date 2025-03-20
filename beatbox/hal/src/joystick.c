@@ -9,7 +9,9 @@
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
+#include <math.h>     // For abs() function
 #include "hal/gpio.h" // Add GPIO header
+#include <gpiod.h>
 
 // I2C configuration for Zen HAT joystick
 #define I2CDRV_LINUX_BUS "/dev/i2c-1"
@@ -25,27 +27,30 @@
 #define JOYSTICK_BUTTON_PIN 15 // GPIO15 on pin 15 from gpioget readings
 
 // Thresholds for joystick directions
-#define UP_THRESHOLD 500    // X axis - below this is UP
+#define UP_THRESHOLD 300    // X axis - below this is UP
 #define DOWN_THRESHOLD 1500 // X axis - above this is DOWN
 
-// Debounce timeout in milliseconds
-#define DIRECTION_DEBOUNCE_MS 50 // Debounce for joystick direction
-#define BUTTON_DEBOUNCE_MS 20    // Shorter debounce for button to improve responsiveness
-
-// Joystick state information
+// Thread control variables
 static pthread_t joystickThreadId;
-static pthread_mutex_t joystickMutex = PTHREAD_MUTEX_INITIALIZER;
-static bool isRunning = false;
-static int i2c_file_desc = -1;
-static struct GpioLine *button_gpio = NULL; // GPIO line for button
+static pthread_t buttonThreadId;
+static volatile bool isJoystickRunning = false;
+static volatile bool isButtonRunning = false;
 
-// Current debounced joystick state
+// Joystick state variables
+static pthread_mutex_t joystickMutex = PTHREAD_MUTEX_INITIALIZER;
 static JoystickDirection currentDirection = JOYSTICK_NONE;
 static bool buttonPressed = false;
 
-// Debounce timer
-static struct timespec lastDirectionChange;
-static struct timespec lastButtonChange;
+// I2C and GPIO handles
+static int i2c_file_desc = -1;
+static struct GpioLine *button_gpio = NULL;
+
+// Private function prototypes
+static int init_i2c_bus(char *bus, int address);
+static void write_i2c_reg16(int i2c_file_desc, uint8_t reg_addr, uint16_t value);
+static uint16_t read_i2c_reg16(int i2c_file_desc, uint8_t reg_addr);
+static void *joystickSamplingThread(void *arg);
+static void *buttonSamplingThread(void *arg);
 
 // Initialize I2C bus for joystick
 static int init_i2c_bus(char *bus, int address)
@@ -101,109 +106,113 @@ static uint16_t read_i2c_reg16(int i2c_file_desc, uint8_t reg_addr)
     return value;
 }
 
-// Read joystick axis value
-static uint16_t read_joystick_axis(uint16_t channel_config)
+// Thread for continuously reading joystick position
+static void *joystickSamplingThread(void *arg)
 {
-    if (i2c_file_desc < 0)
-        return 0;
+    (void)arg; // Prevent unused parameter warning
 
-    write_i2c_reg16(i2c_file_desc, REG_CONFIGURATION, channel_config);
-    uint16_t raw_value = read_i2c_reg16(i2c_file_desc, REG_DATA);
-
-    // Process raw value - swap bytes and shift right 4 bits
-    uint16_t processed_value = ((raw_value & 0xFF) << 8) | ((raw_value & 0xFF00) >> 8);
-    return processed_value >> 4;
-}
-
-// Get time difference in milliseconds
-static long get_time_diff_ms(struct timespec *start, struct timespec *end)
-{
-    return (end->tv_sec - start->tv_sec) * 1000 + (end->tv_nsec - start->tv_nsec) / 1000000;
-}
-
-// Get current time
-static void get_current_time(struct timespec *time)
-{
-    clock_gettime(CLOCK_MONOTONIC, time);
-}
-
-// Raw reading of joystick direction using only X axis for volume
-static JoystickDirection read_raw_joystick_direction(void)
-{
-    uint16_t x_value = read_joystick_axis(JOYSTICK_X_CHANNEL);
-
-    // For debugging - uncomment if needed to see actual values
-    // printf("Joystick X value: %d\n", x_value);
-
-    if (x_value < UP_THRESHOLD)
+    // Configure the channel once at thread start
+    if (i2c_file_desc >= 0)
     {
-        return JOYSTICK_UP;
-    }
-    else if (x_value > DOWN_THRESHOLD)
-    {
-        return JOYSTICK_DOWN;
+        write_i2c_reg16(i2c_file_desc, REG_CONFIGURATION, JOYSTICK_X_CHANNEL);
     }
 
-    return JOYSTICK_NONE;
-}
+    // For debouncing
+    JoystickDirection lastRawDirection = JOYSTICK_NONE;
+    int stableCount = 0;
 
-// Check if the joystick button is pressed (using GPIO)
-static bool read_raw_button_press(void)
-{
-    if (button_gpio == NULL)
+    while (isJoystickRunning)
     {
-        return false;
-    }
-
-    // Read GPIO value
-    int value = Gpio_getValue(button_gpio);
-
-    // Return true if button is pressed (active-low: 0 = pressed)
-    return (value == 0);
-}
-
-// Joystick sampling thread function
-static void *joystickSamplingThread()
-{
-    struct timespec currentTime;
-    JoystickDirection rawDirection;
-    bool rawButtonPress;
-
-    while (isRunning)
-    {
-        get_current_time(&currentTime);
-
-        // Read raw values
-        rawDirection = read_raw_joystick_direction();
-        rawButtonPress = read_raw_button_press();
-
-        // Lock mutex to update shared state
-        pthread_mutex_lock(&joystickMutex);
-
-        // Handle direction debouncing
-        if (rawDirection != currentDirection)
+        if (i2c_file_desc < 0)
         {
-            if (get_time_diff_ms(&lastDirectionChange, &currentTime) > DIRECTION_DEBOUNCE_MS)
-            {
-                currentDirection = rawDirection;
-                lastDirectionChange = currentTime;
-            }
+            // I2C not available, sleep and try again
+            usleep(100000);
+            continue;
         }
 
-        // Handle button press debouncing
-        if (rawButtonPress != buttonPressed)
+        // Read joystick value without reconfiguring the channel
+        uint16_t raw_value = read_i2c_reg16(i2c_file_desc, REG_DATA);
+
+        // Process raw value - swap bytes and shift right 4 bits
+        uint16_t value = ((raw_value & 0xFF) << 8) | ((raw_value & 0xFF00) >> 8);
+        value >>= 4;
+
+        // Determine direction from value
+        JoystickDirection rawDirection = JOYSTICK_NONE;
+        if (value < UP_THRESHOLD)
         {
-            if (get_time_diff_ms(&lastButtonChange, &currentTime) > BUTTON_DEBOUNCE_MS)
-            {
-                buttonPressed = rawButtonPress;
-                lastButtonChange = currentTime;
-            }
+            rawDirection = JOYSTICK_UP;
+        }
+        else if (value > DOWN_THRESHOLD)
+        {
+            rawDirection = JOYSTICK_DOWN;
         }
 
-        pthread_mutex_unlock(&joystickMutex);
+        // Simple debouncing
+        if (rawDirection == lastRawDirection)
+        {
+            stableCount++;
+            if (stableCount >= 3)
+            { // Direction stable for 3 reads
+                pthread_mutex_lock(&joystickMutex);
+                if (currentDirection != rawDirection)
+                {
+                    currentDirection = rawDirection;
+                }
+                pthread_mutex_unlock(&joystickMutex);
+            }
+        }
+        else
+        {
+            stableCount = 0;
+            lastRawDirection = rawDirection;
+        }
 
-        // Sleep to avoid consuming too much CPU
+        // Short sleep to avoid consuming too much CPU
         usleep(10000); // 10ms
+    }
+
+    return NULL;
+}
+
+// Thread for handling button presses
+static void *buttonSamplingThread(void *arg)
+{
+    (void)arg; // Prevent unused parameter warning
+
+    while (isButtonRunning && button_gpio != NULL)
+    {
+        struct gpiod_line_bulk bulkEvents;
+        int numEvents = Gpio_waitForLineChange(button_gpio, &bulkEvents);
+
+        if (numEvents > 0)
+        {
+            // Process each event (should be just one for the button)
+            for (int i = 0; i < numEvents; i++)
+            {
+                struct gpiod_line *line = gpiod_line_bulk_get_line(&bulkEvents, i);
+                struct gpiod_line_event event;
+
+                if (gpiod_line_event_read(line, &event) != -1)
+                {
+                    // Determine button state from event type
+                    // FALLING_EDGE = button pressed (active low)
+                    // RISING_EDGE = button released (active low)
+                    if (event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
+                    {
+                        pthread_mutex_lock(&joystickMutex);
+                        buttonPressed = true;
+                        pthread_mutex_unlock(&joystickMutex);
+                    }
+                    else if (event.event_type == GPIOD_LINE_EVENT_RISING_EDGE)
+                    {
+                        pthread_mutex_lock(&joystickMutex);
+                        buttonPressed = false;
+                        pthread_mutex_unlock(&joystickMutex);
+                    }
+                }
+            }
+        }
     }
 
     return NULL;
@@ -217,85 +226,97 @@ void Joystick_init(void)
     i2c_file_desc = init_i2c_bus(I2CDRV_LINUX_BUS, I2C_DEVICE_ADDRESS);
     if (i2c_file_desc < 0)
     {
-        printf("Joystick initialization failed - I2C error\n");
-    }
-
-    // Initialize GPIO for button
-    Gpio_initialize();
-    button_gpio = Gpio_openForEvents(JOYSTICK_BUTTON_CHIP, JOYSTICK_BUTTON_PIN);
-    if (button_gpio == NULL)
-    {
-        printf("Joystick button GPIO initialization failed - GPIO%d might be in use by another process\n",
-               JOYSTICK_BUTTON_PIN);
-        printf("Continuing without button functionality\n");
+        printf("ERROR: Joystick I2C initialization failed\n");
     }
     else
     {
-        printf("Joystick button GPIO%d initialized successfully\n", JOYSTICK_BUTTON_PIN);
+        // Test I2C communication
+        write_i2c_reg16(i2c_file_desc, REG_CONFIGURATION, JOYSTICK_X_CHANNEL);
+        usleep(5000); // 5ms delay
+        uint16_t test_value = read_i2c_reg16(i2c_file_desc, REG_DATA);
+        uint16_t processed = ((test_value & 0xFF) << 8) | ((test_value & 0xFF00) >> 8);
+        processed >>= 4;
     }
 
-    // Initialize the debouncing timestamps
-    get_current_time(&lastDirectionChange);
-    get_current_time(&lastButtonChange);
+    // Initialize GPIO for button
+    button_gpio = Gpio_openForEvents(JOYSTICK_BUTTON_CHIP, JOYSTICK_BUTTON_PIN);
+    if (button_gpio == NULL)
+    {
+        printf("ERROR: Joystick button GPIO initialization failed\n");
+    }
+}
 
-    printf("Joystick initialized\n");
+void Joystick_startSampling(void)
+{
+    // Start the joystick thread
+    isJoystickRunning = true;
+    if (pthread_create(&joystickThreadId, NULL, joystickSamplingThread, NULL) != 0)
+    {
+        printf("ERROR: Failed to create joystick sampling thread\n");
+        isJoystickRunning = false;
+    }
+
+    // Start the button thread
+    isButtonRunning = true;
+    if (button_gpio != NULL)
+    {
+        if (pthread_create(&buttonThreadId, NULL, buttonSamplingThread, NULL) != 0)
+        {
+            printf("ERROR: Failed to create button sampling thread\n");
+            isButtonRunning = false;
+        }
+    }
+}
+
+void Joystick_stopSampling(void)
+{
+    // Stop the joystick thread
+    if (isJoystickRunning)
+    {
+        isJoystickRunning = false;
+        pthread_join(joystickThreadId, NULL);
+    }
+
+    // Stop the button thread
+    if (isButtonRunning)
+    {
+        isButtonRunning = false;
+        pthread_join(buttonThreadId, NULL);
+    }
 }
 
 void Joystick_cleanup(void)
 {
+    // Stop sampling threads
     Joystick_stopSampling();
 
+    // Close I2C
     if (i2c_file_desc != -1)
     {
         close(i2c_file_desc);
         i2c_file_desc = -1;
     }
 
-    // Clean up GPIO
+    // Close GPIO
     if (button_gpio != NULL)
     {
         Gpio_close(button_gpio);
         button_gpio = NULL;
     }
-    Gpio_cleanup();
 }
 
 JoystickDirection Joystick_getDirection(void)
 {
-    JoystickDirection result;
-
     pthread_mutex_lock(&joystickMutex);
-    result = currentDirection;
+    JoystickDirection direction = currentDirection;
     pthread_mutex_unlock(&joystickMutex);
-
-    return result;
+    return direction;
 }
 
 bool Joystick_isPressed(void)
 {
-    bool result;
-
     pthread_mutex_lock(&joystickMutex);
-    result = buttonPressed;
+    bool pressed = buttonPressed;
     pthread_mutex_unlock(&joystickMutex);
-
-    return result;
-}
-
-void Joystick_startSampling(void)
-{
-    if (!isRunning && i2c_file_desc >= 0)
-    {
-        isRunning = true;
-        pthread_create(&joystickThreadId, NULL, joystickSamplingThread, NULL);
-    }
-}
-
-void Joystick_stopSampling(void)
-{
-    if (isRunning)
-    {
-        isRunning = false;
-        pthread_join(joystickThreadId, NULL);
-    }
+    return pressed;
 }

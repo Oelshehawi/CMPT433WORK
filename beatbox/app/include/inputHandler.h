@@ -12,7 +12,5 @@ void InputHandler_init(void);
 // Clean up input handler resources
 void InputHandler_cleanup(void);
 
-// Process joystick input for volume control
-void InputHandler_processJoystick(void);
 
 #endif

@@ -3,17 +3,22 @@
 #define _GPIO_H_
 
 #include <stdbool.h>
-#include <gpiod.h>
+#include <stdint.h>
 
-// Opaque structure
-struct GpioLine;
+// Opaque struct to hide the gpiod dependency
+// Passes a ptr to struct gpiod_line* around without exposing it to clients
+typedef void GpioLine;
+
+// We'll need the bulk structure still
+// This does expose gpiod library indirectly, which is not great
+#include <gpiod.h>
 
 enum eGpioChips
 {
-    GPIO_CHIP_0,
+    GPIO_CHIP_0 = 0,
     GPIO_CHIP_1,
     GPIO_CHIP_2,
-    GPIO_NUM_CHIPS // Count of chips
+    GPIO_NUM_CHIPS,
 };
 
 // Must initialize before calling any other functions.

@@ -6,6 +6,9 @@
 #include <time.h>
 
 #include "hal/audioMixer.h"
+#include "hal/rotaryEncoder.h"
+#include "hal/buttonStateMachine.h"
+#include "hal/gpio.h"
 #include "drumSounds.h"
 #include "beatPlayer.h"
 #include "terminalDisplay.h"
@@ -22,8 +25,17 @@ static void sigHandler(int sig)
 {
     if (sig == SIGINT || sig == SIGTERM)
     {
-        printf("\nShutting down...\n");
+        printf("\nReceived termination signal. Shutting down...\n");
         isRunning = false;
+
+        // Update terminal display about shutdown right away
+        TerminalDisplay_registerShutdown(&isRunning);
+
+        // Force stdout to flush so the message appears immediately
+        fflush(stdout);
+
+        // Give a short delay to allow threads to notice the flag change
+        usleep(100000); // 100ms
     }
 }
 
@@ -35,6 +47,8 @@ int main(void)
     signal(SIGINT, sigHandler);
     signal(SIGTERM, sigHandler);
 
+    // Initialize components in correct order
+    Gpio_initialize();
     Period_init();
     AudioMixer_init();
     DrumSounds_init();
@@ -42,7 +56,13 @@ int main(void)
     DisplayManager_init();
     InputHandler_init();
     TerminalDisplay_init();
+    // Register terminal display with the isRunning flag
+    TerminalDisplay_registerShutdown(&isRunning);
     UdpServer_init();
+
+    // Initialize the button state machine and rotary encoder
+    BtnStateMachine_init();
+    RotaryEncoder_init();
 
     // Default mode and settings
     BeatPlayer_setMode(BEAT_MODE_ROCK);
@@ -56,6 +76,10 @@ int main(void)
     clock_gettime(CLOCK_MONOTONIC, &lastUpdateTime);
 
     printf("Ready - press Ctrl+C to exit\n");
+
+    // Set up a watchdog timeout for forced exit
+    time_t start_time = time(NULL);
+    const int MAX_RUNTIME = 3600; // 1 hour maximum runtime as a safety valve
 
     // Main loop
     while (isRunning)
@@ -76,7 +100,9 @@ int main(void)
         long elapsedMs = (currentTime.tv_sec - lastUpdateTime.tv_sec) * 1000 +
                          (currentTime.tv_nsec - lastUpdateTime.tv_nsec) / 1000000;
 
-        InputHandler_processJoystick();
+        // Update beat mode from rotary encoder
+        BeatMode_t encoderMode = RotaryEncoder_getBeatMode();
+        BeatPlayer_setMode(encoderMode);
 
         // Update display every second
         if (elapsedMs >= 1000)
@@ -89,11 +115,25 @@ int main(void)
         }
 
         usleep(50000); // 50ms sleep
+
+        // Check if the application has been running for too long
+        time_t current_time = time(NULL);
+        if (difftime(current_time, start_time) > MAX_RUNTIME)
+        {
+            printf("Application running for too long. Forcing shutdown.\n");
+            isRunning = false;
+            break;
+        }
     }
 
-    // Cleanup
+    // Cleanup in reverse order of initialization
     printf("Cleaning up...\n");
 
+    // Stop the beat player first to avoid audio glitches during cleanup
+    BeatPlayer_stop();
+
+    RotaryEncoder_cleanup();
+    BtnStateMachine_cleanup();
     UdpServer_cleanup();
     InputHandler_cleanup();
     DisplayManager_cleanup();
@@ -101,7 +141,10 @@ int main(void)
     BeatPlayer_cleanup();
     DrumSounds_cleanup();
     AudioMixer_cleanup();
+    Gpio_cleanup();
 
-    printf("BeatBox Application terminated.\n");
+    // Reset the terminal
+    printf("\033[0m"); // Reset all terminal attributes
+    printf("\nBeatBox Application terminated.\n");
     return 0;
 }

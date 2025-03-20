@@ -15,4 +15,6 @@ add_library(hal STATIC ${MY_SOURCES})
 target_include_directories(hal PUBLIC include)
 
 # Link against the LCD libraries (adjusted to use correct library name)
+find_library(GPIOD_LIBRARY gpiod)
+target_link_libraries(hal LINK_PRIVATE gpiod)
 target_link_libraries(hal LINK_PRIVATE lcd)

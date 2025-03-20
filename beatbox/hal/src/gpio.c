@@ -68,6 +68,8 @@ void Gpio_cleanup(void)
 struct GpioLine *Gpio_openForEvents(enum eGpioChips chip, int pinNumber)
 {
     assert(s_isInitialized);
+    printf("DEBUG: Opening GPIO line for events: chip %d, pin %d\n", chip, pinNumber);
+
     struct gpiod_chip *gpiodChip = s_openGpiodChips[chip];
     struct gpiod_line *line = gpiod_chip_get_line(gpiodChip, pinNumber);
     if (!line)
@@ -76,38 +78,24 @@ struct GpioLine *Gpio_openForEvents(enum eGpioChips chip, int pinNumber)
         return NULL;
     }
 
-    // Configure the line as an input with pull-up
-    int ret = gpiod_line_request_input_flags(line, "GPIO Input", GPIOD_LINE_REQUEST_FLAG_BIAS_PULL_UP);
-    if (ret < 0)
+    // Configure the line for events directly here
+    if (gpiod_line_request_both_edges_events(line, "GPIO Event Line") != 0)
     {
-        perror("Failed to request GPIO line as input");
+        perror("Failed to request GPIO line for events");
         return NULL;
     }
 
+    printf("DEBUG: Successfully opened GPIO line: chip %d, pin %d\n", chip, pinNumber);
     return (struct GpioLine *)line;
 }
 
 void Gpio_close(struct GpioLine *line)
 {
     assert(s_isInitialized);
-    gpiod_line_release((struct gpiod_line *)line);
-}
-
-// Get the current value of a GPIO line (non-blocking)
-// Returns 0 for LOW, 1 for HIGH
-int Gpio_getValue(struct GpioLine *line)
-{
-    assert(s_isInitialized);
-
-    if (!line)
+    if (line)
     {
-        return -1;
+        gpiod_line_release((struct gpiod_line *)line);
     }
-
-    // Just read the value without requesting the line again
-    int value = gpiod_line_get_value((struct gpiod_line *)line);
-
-    return value;
 }
 
 // Returns the number of events
@@ -117,20 +105,23 @@ int Gpio_waitForLineChange(
 {
     assert(s_isInitialized);
 
-    // Source: https://people.eng.unimelb.edu.au/pbeuchat/asclinic/software/building_block_gpio_encoder_counting.html
+    // Ensure we have a valid line
+    if (!line1)
+    {
+        printf("ERROR: Null GPIO line passed to Gpio_waitForLineChange\n");
+        return 0;
+    }
+
     struct gpiod_line_bulk bulkWait;
     gpiod_line_bulk_init(&bulkWait);
-
-    // TODO: Add more lines if needed
     gpiod_line_bulk_add(&bulkWait, (struct gpiod_line *)line1);
 
-    gpiod_line_request_bulk_both_edges_events(&bulkWait, "Event Waiting");
-
+    // The line is already configured for events, so just wait
     int result = gpiod_line_event_wait_bulk(&bulkWait, NULL, bulkEvents);
     if (result == -1)
     {
         perror("Error waiting on lines for event waiting");
-        exit(EXIT_FAILURE);
+        return 0;
     }
 
     int numEvents = gpiod_line_bulk_num_lines(bulkEvents);

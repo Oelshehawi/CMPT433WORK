@@ -18,6 +18,7 @@ target_link_libraries(beatbox LINK_PRIVATE Threads::Threads)
 
 # LCD support
 target_link_libraries(beatbox LINK_PRIVATE lcd)
+target_link_libraries(beatbox LINK_PRIVATE gpiod)
 
 # Copy executable to final location (change `wave_player_cmake` to project name as needed)
 add_custom_command(TARGET beatbox POST_BUILD 

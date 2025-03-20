@@ -5,13 +5,138 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <stdlib.h> // For exit()
 
 // Private variables
 static JoystickDirection lastDirection = JOYSTICK_NONE;
-static bool lastButtonState = false; // Track previous button state for edge detection
-static int holdCounter = 0;          // Counter for handling continuous adjustments
-#define INITIAL_DELAY_COUNT 5        // Reduced initial delay for faster response
-#define CONTINUOUS_RATE 2            // Adjust volume every time when holding
+static bool lastButtonState = false;    // Track previous button state for edge detection
+static int holdCounter = 0;             // Counter for handling continuous adjustments
+static int directionChangeCooldown = 0; // Cooldown counter for debouncing direction changes
+
+// Timing constants for press vs hold distinction
+#define INITIAL_DELAY_COUNT 100       // Initial delay before continuous adjustment (100ms)
+#define CONTINUOUS_RATE 2            // Adjust volume every N cycles when holding
+#define VOLUME_CHANGE_AMOUNT 5       // Standard volume change amount
+#define DIRECTION_CHANGE_COOLDOWN 100 // Cooldown period after direction change (200ms)
+
+// Threading variables
+static pthread_t joystick_thread;
+static volatile bool keep_thread_running = false;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// Thread function for joystick processing
+static void *joystick_thread_function(void *arg)
+{
+    (void)arg; // Silence unused parameter warning
+
+    printf("Joystick thread started\n");
+
+    while (keep_thread_running)
+    {
+        // Lock mutex before accessing shared variables
+        pthread_mutex_lock(&mutex);
+
+        // Get current joystick direction and button state
+        JoystickDirection direction = Joystick_getDirection();
+        bool buttonPressed = Joystick_isPressed();
+
+        // Check if direction has changed
+        bool directionChanged = (direction != lastDirection);
+
+        // Handle button press for screen switching (on button press, not release)
+        if (buttonPressed && !lastButtonState)
+        {
+            // Button was just pressed, switch to next screen
+            LcdDisplay_nextScreen();
+        }
+
+        // Handle volume control with up/down
+        if (direction == JOYSTICK_UP || direction == JOYSTICK_DOWN)
+        {
+            // Handle the volume change in three cases:
+            // 1. Direction has just changed AND we're not in cooldown
+            // 2. User is holding the joystick in a direction
+            bool shouldChangeVolume = false;
+
+            if (directionChanged && directionChangeCooldown == 0)
+            {
+                // Case 1: Direction just changed and no cooldown active
+                shouldChangeVolume = true;
+                directionChangeCooldown = DIRECTION_CHANGE_COOLDOWN; // Start cooldown
+                holdCounter = 0;                                     // Reset hold counter when direction changes
+            }
+            else if (!directionChanged && holdCounter >= INITIAL_DELAY_COUNT &&
+                     holdCounter % CONTINUOUS_RATE == 0)
+            {
+                // Case 2: Holding joystick in a direction
+                shouldChangeVolume = true;
+            }
+
+            if (shouldChangeVolume)
+            {
+                int currentVolume = AudioMixer_getVolume();
+                int newVolume = currentVolume;
+
+                if (direction == JOYSTICK_UP)
+                {
+                    newVolume = currentVolume + VOLUME_CHANGE_AMOUNT;
+                    if (newVolume > AUDIOMIXER_MAX_VOLUME)
+                    {
+                        newVolume = AUDIOMIXER_MAX_VOLUME;
+                    }
+                }
+                else if (direction == JOYSTICK_DOWN)
+                {
+                    newVolume = currentVolume - VOLUME_CHANGE_AMOUNT;
+                    if (newVolume < 0)
+                    {
+                        newVolume = 0;
+                    }
+                }
+
+                if (newVolume != currentVolume)
+                {
+                    AudioMixer_setVolume(newVolume);
+                    printf("Volume %s to: %d\n",
+                           direction == JOYSTICK_UP ? "increased" : "decreased",
+                           newVolume);
+                }
+            }
+
+            // Increment hold counter only if direction hasn't changed
+            if (!directionChanged)
+            {
+                holdCounter++;
+            }
+        }
+        else
+        {
+            // Reset hold counter when in neutral position
+            holdCounter = 0;
+        }
+
+        // Decrement cooldown counter if active
+        if (directionChangeCooldown > 0)
+        {
+            directionChangeCooldown--;
+        }
+
+        // Update last states for next time
+        lastDirection = direction;
+        lastButtonState = buttonPressed;
+
+        // Unlock mutex
+        pthread_mutex_unlock(&mutex);
+
+        // Sleep to reduce CPU usage
+        usleep(10000); // 10ms for responsive input
+    }
+
+    printf("Joystick thread stopped\n");
+    return NULL;
+}
 
 // Initialize the input handler
 void InputHandler_init(void)
@@ -23,75 +148,42 @@ void InputHandler_init(void)
     // Set default volume
     AudioMixer_setVolume(80);
 
+    // Start the joystick processing thread
+    keep_thread_running = true;
+    if (pthread_create(&joystick_thread, NULL, joystick_thread_function, NULL) != 0)
+    {
+        perror("Failed to create joystick thread");
+        exit(1);
+    }
+
     printf("Input handler initialized\n");
 }
 
 // Clean up input handler resources
 void InputHandler_cleanup(void)
 {
-    Joystick_stopSampling();
-    Joystick_cleanup();
-}
+    printf("Starting Input Handler cleanup...\n");
 
-// Process joystick input for volume control and screen switching
-void InputHandler_processJoystick(void)
-{
-    // Get current joystick direction and button state
-    JoystickDirection direction = Joystick_getDirection();
-    bool buttonPressed = Joystick_isPressed();
+    // Stop the thread
+    keep_thread_running = false;
 
-    // Check if direction has changed
-    bool directionChanged = (direction != lastDirection);
+    // Give the thread a chance to clean up
+    usleep(100000); // 100ms
 
-    // Handle button press for screen switching (on button press, not release)
-    if (buttonPressed && !lastButtonState)
+    // Join the thread with standard pthread_join
+    // We'll set a short timeout and cancel if it takes too long
+    int join_result = pthread_join(joystick_thread, NULL);
+    if (join_result != 0)
     {
-        // Button was just pressed, switch to next screen
-        LcdDisplay_nextScreen();
-    }
-
-    // Handle volume control with up/down
-    if (direction == JOYSTICK_UP)
-    {
-        // Either direction just changed OR we're holding long enough for continuous adjustment
-        if (directionChanged || (holdCounter >= INITIAL_DELAY_COUNT && holdCounter % CONTINUOUS_RATE == 0))
-        {
-            int currentVolume = AudioMixer_getVolume();
-            int newVolume = currentVolume + 5;
-            if (newVolume > AUDIOMIXER_MAX_VOLUME)
-            {
-                newVolume = AUDIOMIXER_MAX_VOLUME;
-            }
-            AudioMixer_setVolume(newVolume);
-        }
-
-        // Increment hold counter when holding in a direction
-        holdCounter++;
-    }
-    else if (direction == JOYSTICK_DOWN)
-    {
-        // Either direction just changed OR we're holding long enough for continuous adjustment
-        if (directionChanged || (holdCounter >= INITIAL_DELAY_COUNT && holdCounter % CONTINUOUS_RATE == 0))
-        {
-            int currentVolume = AudioMixer_getVolume();
-            int newVolume = currentVolume - 5;
-            if (newVolume < 0)
-            {
-                newVolume = 0;
-            }
-            AudioMixer_setVolume(newVolume);
-        }
-
-        // Increment hold counter when holding in a direction
-        holdCounter++;
+        printf("WARNING: Joystick thread join failed\n");
     }
     else
     {
-        // Reset hold counter when in neutral position
-        holdCounter = 0;
+        printf("Joystick thread joined successfully\n");
     }
 
-    // Update last states for next time
-    lastDirection = direction;
-    lastButtonState = buttonPressed;
+    Joystick_stopSampling();
+    Joystick_cleanup();
+
+    printf("Input Handler cleanup complete\n");
 }
