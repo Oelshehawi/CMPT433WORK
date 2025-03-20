@@ -104,6 +104,10 @@ int main(void)
         BeatMode_t encoderMode = RotaryEncoder_getBeatMode();
         BeatPlayer_setMode(encoderMode);
 
+        // Update BPM from rotary encoder
+        int encoderBPM = RotaryEncoder_getBPM();
+        BeatPlayer_setTempo(encoderBPM);
+
         // Update display every second
         if (elapsedMs >= 1000)
         {

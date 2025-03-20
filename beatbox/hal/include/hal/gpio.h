@@ -30,10 +30,6 @@ void Gpio_cleanup(void);
 //  pinNumber: such as 15
 struct GpioLine *Gpio_openForEvents(enum eGpioChips chip, int pinNumber);
 
-// Get the current value of a GPIO line (non-blocking)
-// Returns 0 for LOW, 1 for HIGH
-int Gpio_getValue(struct GpioLine *line);
-
 int Gpio_waitForLineChange(
     struct GpioLine *line1,
     struct gpiod_line_bulk *bulkEvents);

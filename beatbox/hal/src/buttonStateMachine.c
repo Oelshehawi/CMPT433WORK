@@ -3,6 +3,7 @@
 #include "hal/buttonStateMachine.h"
 #include "hal/gpio.h"
 #include "../include/hal/rotaryEncoder.h" // For direct access to beat modes
+#include "../../app/include/beatPlayer.h" // For directly updating the beat player mode
 
 #include <assert.h>
 #include <stdlib.h>
@@ -15,10 +16,13 @@
 #define GPIO_CHIP GPIO_CHIP_0
 #define GPIO_LINE_NUMBER 10
 
-static bool isInitialized = false;
+// Debounce parameters
+#define DEBOUNCE_TIMEOUT_MS 250 // 250ms between button actions
 
+static bool isInitialized = false;
 struct GpioLine *s_lineBtn = NULL;
 static atomic_int counter = 0;
+static long lastButtonPressTime = 0;
 
 // Current beat mode (shared with rotaryEncoder)
 extern BeatMode_t currentBeatMode;
@@ -37,13 +41,29 @@ struct state
     struct stateEvent falling;
 };
 
+// Get current time in milliseconds
+static long getCurrentTimeMs(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+}
+
 /*
     START STATEMACHINE
 */
 static void on_release(void)
 {
+    // Debounce - check if enough time has passed since last button press
+    long currentTime = getCurrentTimeMs();
+    if (currentTime - lastButtonPressTime < DEBOUNCE_TIMEOUT_MS)
+    {
+        return; // Ignore this press (debouncing)
+    }
+
+    // Update last press time
+    lastButtonPressTime = currentTime;
     counter++;
-    printf("DEBUG: Button press detected (counter=%d)\n", counter);
 
     // Directly cycle through beat modes
     switch (currentBeatMode)
@@ -61,7 +81,9 @@ static void on_release(void)
         currentBeatMode = BEAT_MODE_NONE;
     }
 
-    printf("DEBUG: Beat mode changed to: %d\n", currentBeatMode);
+    // Update the BeatPlayer with the new mode
+    BeatPlayer_setMode(currentBeatMode);
+    printf("Beat mode changed to: %d\n", currentBeatMode);
 }
 
 struct state states[] = {
@@ -85,7 +107,7 @@ struct state *pCurrentState = &states[0];
 
 void BtnStateMachine_init()
 {
-    printf("DEBUG: Initializing Button State Machine...\n");
+    printf("Initializing Button State Machine...\n");
     assert(!isInitialized);
     s_lineBtn = Gpio_openForEvents(GPIO_CHIP, GPIO_LINE_NUMBER);
     if (!s_lineBtn)
@@ -94,16 +116,17 @@ void BtnStateMachine_init()
         exit(EXIT_FAILURE);
     }
     isInitialized = true;
-    printf("DEBUG: Button State Machine initialized successfully\n");
+    lastButtonPressTime = getCurrentTimeMs(); // Initialize time
+    printf("Button State Machine initialized successfully\n");
 }
 
 void BtnStateMachine_cleanup()
 {
-    printf("DEBUG: Cleaning up Button State Machine...\n");
+    printf("Cleaning up Button State Machine...\n");
     assert(isInitialized);
     isInitialized = false;
     Gpio_close(s_lineBtn);
-    printf("DEBUG: Button State Machine cleanup complete\n");
+    printf("Button State Machine cleanup complete\n");
 }
 
 int BtnStateMachine_getValue()
@@ -122,14 +145,8 @@ void BtnStateMachine_doState()
 {
     assert(isInitialized);
 
-    // printf("\n\nWaiting for an event...\n");
     struct gpiod_line_bulk bulkEvents;
     int numEvents = Gpio_waitForLineChange(s_lineBtn, &bulkEvents);
-
-    if (numEvents > 0)
-    {
-        printf("DEBUG: Button state machine detected %d events\n", numEvents);
-    }
 
     // Iterate over the event
     for (int i = 0; i < numEvents; i++)
@@ -150,7 +167,6 @@ void BtnStateMachine_doState()
 
         // Run the state machine
         bool isRising = event.event_type == GPIOD_LINE_EVENT_RISING_EDGE;
-        printf("DEBUG: Button event: %s edge\n", isRising ? "RISING" : "FALLING");
 
         // Can check with line it is, if you have more than one...
         bool isBtn = this_line_number == GPIO_LINE_NUMBER;
