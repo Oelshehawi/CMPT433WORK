@@ -1,3 +1,17 @@
+/*
+ * main.c
+ * 
+ * Main control file for the BeatBox project
+ * 
+ * Key responsibilities:
+ * - System initialization (audio, controls, display)
+ * - Main program loop management
+ * - Input processing (rotary encoder, buttons, accelerometer)
+ * - Shutdown and cleanup
+ * 
+ * The program runs until receiving a shutdown signal (Ctrl+C) or UDP command,
+ * then ensures all components are properly cleaned up before exit.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -32,11 +46,9 @@ static void sigHandler(int sig)
         // Update terminal display about shutdown right away
         TerminalDisplay_registerShutdown(&isRunning);
 
-        // Force stdout to flush so the message appears immediately
         fflush(stdout);
 
-        // Give a short delay to allow threads to notice the flag change
-        usleep(100000); // 100ms
+        usleep(100000); 
     }
 }
 
@@ -60,7 +72,6 @@ int main(void)
     DisplayManager_init();
     InputHandler_init();
     TerminalDisplay_init();
-    // Register terminal display with the isRunning flag
     TerminalDisplay_registerShutdown(&isRunning);
     UdpServer_init();
 
@@ -86,9 +97,8 @@ int main(void)
 
     // Set up a watchdog timeout for forced exit
     time_t start_time = time(NULL);
-    const int MAX_RUNTIME = 3600; // 1 hour maximum runtime as a safety valve
+    const int MAX_RUNTIME = 3600; 
 
-    // Main loop
     while (isRunning)
     {
         // Check if UDP server requested shutdown
@@ -97,11 +107,9 @@ int main(void)
             printf("Shutdown requested via UDP\n");
             isRunning = false;
 
-            // Tell the terminal display to stop, just like we do for Ctrl+C
             TerminalDisplay_registerShutdown(&isRunning);
 
-            // Give a short delay to allow threads to notice the flag change
-            usleep(100000); // 100ms
+            usleep(100000); 
 
             break;
         }
@@ -118,23 +126,19 @@ int main(void)
         BeatMode_t encoderMode = RotaryEncoder_getBeatMode();
         BeatMode_t playerMode = BeatPlayer_getMode();
 
-        // Bidirectional synchronization of modes
         if (encoderMode != playerMode)
         {
             if (encoderMode != lastEncoderMode)
             {
-                // Encoder was changed, update player
                 BeatPlayer_setMode(encoderMode);
             }
             else
             {
-                // Player was changed (likely via UDP), update encoder
-                extern BeatMode_t currentBeatMode; // From rotaryEncoder.c
+                extern BeatMode_t currentBeatMode; 
                 currentBeatMode = playerMode;
             }
         }
 
-        // Remember last encoder mode for detecting changes
         lastEncoderMode = encoderMode;
 
         // Process all input devices
@@ -145,14 +149,11 @@ int main(void)
         // Update display every second
         if (elapsedMs >= 1000)
         {
-            // Update displays
             DisplayManager_updateDisplay();
-
-            // Remember when we did the update
             lastUpdateTime = currentTime;
         }
 
-        usleep(50000); // 50ms sleep
+        usleep(50000); 
 
         // Check if the application has been running for too long
         time_t current_time = time(NULL);
@@ -182,8 +183,7 @@ int main(void)
     AccelerometerApp_cleanup();
     Gpio_cleanup();
 
-    // Reset the terminal
-    printf("\033[0m"); // Reset all terminal attributes
+    printf("\033[0m"); 
     printf("\nBeatBox Application terminated.\n");
     return 0;
 }

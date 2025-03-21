@@ -1,3 +1,5 @@
+// This file is used to read the joystick data 
+// from the I2C bus and return the data as a struct
 #include "hal/joystick.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +11,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <string.h>
-#include <math.h>     // For abs() function
+#include <math.h>     
 #include "hal/gpio.h" // Add GPIO header
 #include <gpiod.h>
 
@@ -19,16 +21,16 @@
 #define REG_CONFIGURATION 0x01
 #define REG_DATA 0x00
 
-// Channel configuration for TLA2024 ADC
-#define JOYSTICK_X_CHANNEL 0x83C2 // Channel 0 for X-axis (up/down)
+// Channel 0 for X-axis (up/down)
+#define JOYSTICK_X_CHANNEL 0x83C2 
 
 // GPIO configuration for joystick button
 #define JOYSTICK_BUTTON_CHIP GPIO_CHIP_2
-#define JOYSTICK_BUTTON_PIN 15 // GPIO15 on pin 15 from gpioget readings
+#define JOYSTICK_BUTTON_PIN 15 
 
-// Thresholds for joystick directions
-#define UP_THRESHOLD 300    // X axis - below this is UP
-#define DOWN_THRESHOLD 1500 // X axis - above this is DOWN
+// Thresholds for joystick 
+#define UP_THRESHOLD 300    // Below this is UP
+#define DOWN_THRESHOLD 1500 // Above this is DOWN
 
 // Thread control variables
 static pthread_t joystickThreadId;
@@ -89,13 +91,11 @@ static void write_i2c_reg16(int i2c_file_desc, uint8_t reg_addr, uint16_t value)
 // Read from I2C register
 static uint16_t read_i2c_reg16(int i2c_file_desc, uint8_t reg_addr)
 {
-    // To read a register, must first write the address
     if (write(i2c_file_desc, &reg_addr, 1) != 1)
     {
         perror("I2C register select failed");
         return 0;
     }
-    // Now read the value and return it
     uint16_t value = 0;
     int bytes_read = read(i2c_file_desc, &value, sizeof(value));
     if (bytes_read != sizeof(value))
@@ -109,15 +109,13 @@ static uint16_t read_i2c_reg16(int i2c_file_desc, uint8_t reg_addr)
 // Thread for continuously reading joystick position
 static void *joystickSamplingThread(void *arg)
 {
-    (void)arg; // Prevent unused parameter warning
+    (void)arg; 
 
-    // Configure the channel once at thread start
     if (i2c_file_desc >= 0)
     {
         write_i2c_reg16(i2c_file_desc, REG_CONFIGURATION, JOYSTICK_X_CHANNEL);
     }
 
-    // For debouncing
     JoystickDirection lastRawDirection = JOYSTICK_NONE;
     int stableCount = 0;
 
@@ -125,15 +123,12 @@ static void *joystickSamplingThread(void *arg)
     {
         if (i2c_file_desc < 0)
         {
-            // I2C not available, sleep and try again
             usleep(100000);
             continue;
         }
 
-        // Read joystick value without reconfiguring the channel
         uint16_t raw_value = read_i2c_reg16(i2c_file_desc, REG_DATA);
 
-        // Process raw value - swap bytes and shift right 4 bits
         uint16_t value = ((raw_value & 0xFF) << 8) | ((raw_value & 0xFF00) >> 8);
         value >>= 4;
 
@@ -153,7 +148,7 @@ static void *joystickSamplingThread(void *arg)
         {
             stableCount++;
             if (stableCount >= 3)
-            { // Direction stable for 3 reads
+            {
                 pthread_mutex_lock(&joystickMutex);
                 if (currentDirection != rawDirection)
                 {
@@ -168,8 +163,7 @@ static void *joystickSamplingThread(void *arg)
             lastRawDirection = rawDirection;
         }
 
-        // Short sleep to avoid consuming too much CPU
-        usleep(10000); // 10ms
+        usleep(10000); 
     }
 
     return NULL;
@@ -178,7 +172,7 @@ static void *joystickSamplingThread(void *arg)
 // Thread for handling button presses
 static void *buttonSamplingThread(void *arg)
 {
-    (void)arg; // Prevent unused parameter warning
+    (void)arg; 
 
     while (isButtonRunning && button_gpio != NULL)
     {
@@ -195,7 +189,6 @@ static void *buttonSamplingThread(void *arg)
 
                 if (gpiod_line_event_read(line, &event) != -1)
                 {
-                    // Determine button state from event type
                     // FALLING_EDGE = button pressed (active low)
                     // RISING_EDGE = button released (active low)
                     if (event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE)
@@ -218,7 +211,6 @@ static void *buttonSamplingThread(void *arg)
     return NULL;
 }
 
-// Public functions
 
 void Joystick_init(void)
 {
@@ -287,17 +279,14 @@ void Joystick_stopSampling(void)
 
 void Joystick_cleanup(void)
 {
-    // Stop sampling threads
     Joystick_stopSampling();
 
-    // Close I2C
     if (i2c_file_desc != -1)
     {
         close(i2c_file_desc);
         i2c_file_desc = -1;
     }
 
-    // Close GPIO
     if (button_gpio != NULL)
     {
         Gpio_close(button_gpio);

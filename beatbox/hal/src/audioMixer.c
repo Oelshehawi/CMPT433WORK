@@ -1,5 +1,5 @@
-// Incomplete implementation of an audio mixer. Search for "REVISIT" to find things
-// which are left as incomplete.
+// Playback sounds in real time, allowing multiple simultaneous wave files
+// to be mixed together and played without jitter.
 // Note: Generates low latency audio on BeagleBone Black; higher latency found on host.
 #include "hal/audioMixer.h"
 #include <alsa/asoundlib.h>
@@ -56,8 +56,6 @@ void AudioMixer_init(void)
     AudioMixer_setVolume(DEFAULT_VOLUME);
 
     // Initialize the currently active sound-bites being played
-    // REVISIT:- Implement this. Hint: set the pSound pointer to NULL for each
-    //     sound bite.
     for (int i = 0; i < MAX_SOUND_BITES; i++)
     {
         soundBites[i].pSound = NULL;
@@ -157,18 +155,6 @@ void AudioMixer_queueSound(wavedata_t *pSound)
     assert(pSound->pData);
 
     // Insert the sound by searching for an empty sound bite spot
-    /*
-     * REVISIT: Implement this:
-     * 1. Since this may be called by other threads, and there is a thread
-     *    processing the soundBites[] array, we must ensure access is threadsafe.
-     * 2. Search through the soundBites[] array looking for a free slot.
-     * 3. If a free slot is found, place the new sound file into that slot.
-     *    Note: You are only copying a pointer, not the entire data of the wave file!
-     * 4. After searching through all slots, if no free slot is found then print
-     *    an error message to the console (and likely just return vs asserting/exiting
-     *    because the application most likely doesn't want to crash just for
-     *    not being able to play another wave file.
-     */
 
     // Lock the mutex to ensure thread safety
     pthread_mutex_lock(&audioMutex);
@@ -267,46 +253,6 @@ void AudioMixer_setVolume(int newVolume)
 //    size: the number of *values* to store into buff
 static void fillPlaybackBuffer(short *buff, int size)
 {
-    /*
-     * REVISIT: Implement this
-     * 1. Wipe the buff to all 0's to clear any previous PCM data.
-     *    Hint: use memset(); read the docs about its use of size.
-     * 2. Since this is called from a background thread, and soundBites[] array
-     *    may be used by any other thread, must synchronize this.
-     * 3. Loop through each slot in soundBites[], which are sounds that are either
-     *    waiting to be played, or partially already played:
-     *    - If the sound bite slot is unused, do nothing for this slot.
-     *    - Otherwise "add" this sound bite's data to the play-back buffer
-     *      (other sound bites needing to be played back will also add to the same data).
-     *      * Record that this portion of the sound bite has been played back by incrementing
-     *        the location inside the data where play-back currently is.
-     *      * If you have now played back the entire sample, free the slot in the
-     *        soundBites[] array.
-     *
-     * Notes on "adding" PCM samples:
-     * - PCM is stored as signed shorts (between SHRT_MIN and SHRT_MAX).
-     * - When adding values, ensure there is not an overflow. Any values which would
-     *   greater than SHRT_MAX should be clipped to SHRT_MAX; likewise for underflow.
-     * - Don't overflow any arrays!
-     * - Efficiency matters here! The compiler may do quite a bit for you, but it doesn't
-     *   hurt to keep it in mind. Here are some tips for efficiency and readability:
-     *   * If, for each pass of the loop which "adds" you need to change a value inside
-     *     a struct inside an array, it may be faster to first load the value into a local
-     *      variable, increment this variable as needed throughout the loop, and then write it
-     *     back into the struct inside the array after. For example:
-     *           int offset = myArray[someIdx].value;
-     *           for (int i =...; i < ...; i++) {
-     *               offset ++;
-     *           }
-     *           myArray[someIdx].value = offset;
-     *   * If you need a value in a number of places, try loading it into a local variable
-     *          int someNum = myArray[someIdx].value;
-     *          if (someNum < X || someNum > Y || someNum != Z) {
-     *              someNum = 42;
-     *          }
-     *          ... use someNum vs myArray[someIdx].value;
-     *
-     */
 
     // Wipe the buffer to all 0's to clear any previous PCM data
     memset(buff, 0, size * SAMPLE_SIZE);

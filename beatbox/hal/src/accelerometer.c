@@ -1,3 +1,5 @@
+// This file is used to read the accelerometer data 
+// from the I2C bus and return the data 
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -14,7 +16,7 @@
 
 // Device bus & address
 #define I2CDRV_LINUX_BUS "/dev/i2c-1"
-#define ACCEL_ADDR 0x19  // Accelerometer address on I2C bus
+#define ACCEL_ADDR 0x19  
 
 // Accelerometer registers
 #define ACCEL_CTRL_REG1 0x20
@@ -30,16 +32,13 @@ static pthread_t accel_thread;
 static volatile bool keep_running = false;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// Static variables
 static int i2c_file_desc = -1;
 static bool is_initialized = false;
 
-// Accelerometer data
 static int16_t current_x = 0;
 static int16_t current_y = 0;
 static int16_t current_z = 0;
 
-// Function declarations
 static int init_i2c_bus(char* bus, int address);
 static bool write_register(uint8_t reg, uint8_t value);
 static uint8_t read_register(uint8_t reg);
@@ -90,61 +89,55 @@ static uint8_t read_register(uint8_t reg)
     return value;
 }
 
+// Thread function to read the accelerometer data
 static void* accelerometer_thread_function(void* arg)
 {
-    (void)arg; // Prevent unused parameter warning
+    (void)arg; 
 
     while (keep_running) {
-        // Read accelerometer values
+        
         int16_t x, y, z;
         
-        // Read X axis
         uint8_t x_l = read_register(ACCEL_OUT_X_L);
         uint8_t x_h = read_register(ACCEL_OUT_X_H);
         x = (int16_t)((x_h << 8) | x_l);
 
-        // Read Y axis
         uint8_t y_l = read_register(ACCEL_OUT_Y_L);
         uint8_t y_h = read_register(ACCEL_OUT_Y_H);
         y = (int16_t)((y_h << 8) | y_l);
 
-        // Read Z axis
         uint8_t z_l = read_register(ACCEL_OUT_Z_L);
         uint8_t z_h = read_register(ACCEL_OUT_Z_H);
         z = (int16_t)((z_h << 8) | z_l);
 
-        // Update current values with mutex protection
         pthread_mutex_lock(&mutex);
         current_x = x;
         current_y = y;
         current_z = z;
         pthread_mutex_unlock(&mutex);
 
-        // Sleep for a short period to avoid excessive CPU usage
-        usleep(10000); // 10ms sleep
+        usleep(10000); 
     }
 
     return NULL;
 }
 
+// Initialize the accelerometer
 bool Accelerometer_init(void)
 {
     if (is_initialized) {
         return true;
     }
 
-    // Initialize I2C bus
     i2c_file_desc = init_i2c_bus(I2CDRV_LINUX_BUS, ACCEL_ADDR);
     if (i2c_file_desc == -1) {
         return false;
     }
 
-    // Configure accelerometer
-    if (!write_register(ACCEL_CTRL_REG1, 0x47)) {  // Normal mode, all axes enabled
+    if (!write_register(ACCEL_CTRL_REG1, 0x47)) { 
         return false;
     }
 
-    // Start the accelerometer thread
     keep_running = true;
     if (pthread_create(&accel_thread, NULL, accelerometer_thread_function, NULL) != 0) {
         printf("ERROR: Failed to create accelerometer thread\n");
@@ -174,6 +167,7 @@ void Accelerometer_cleanup(void)
     is_initialized = false;
 }
 
+// Read the raw accelerometer data
 bool Accelerometer_readRaw(int16_t* x, int16_t* y, int16_t* z)
 {
     if (!is_initialized || i2c_file_desc == -1) {

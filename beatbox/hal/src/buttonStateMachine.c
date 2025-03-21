@@ -1,4 +1,5 @@
-// State machine for handling rotary encoder button press
+// This file is used to handle the state machine 
+// for the rotary encoder button press
 
 #include "hal/buttonStateMachine.h"
 #include "hal/gpio.h"
@@ -9,24 +10,20 @@
 #include <stdio.h>
 #include <stdatomic.h>
 
-// Pin config info: GPIO 24 (Rotary Encoder PUSH)
+// otary Encoder PUSH
 #define GPIO_CHIP GPIO_CHIP_0
 #define GPIO_LINE_NUMBER 10
 
-// Debounce parameters
-#define DEBOUNCE_TIMEOUT_MS 250 // 250ms between button actions
+#define DEBOUNCE_TIMEOUT_MS 250 
 
 static bool isInitialized = false;
 struct GpioLine *s_lineBtn = NULL;
 static atomic_int counter = 0;
 static long lastButtonPressTime = 0;
 
-// Current beat mode (shared with rotaryEncoder)
 extern BeatMode_t currentBeatMode;
 
-/*
-    Define the Statemachine Data Structures
-*/
+// Statemachine data structures
 struct stateEvent
 {
     struct state *pNextState;
@@ -46,16 +43,15 @@ static long getCurrentTimeMs(void)
     return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
 }
 
-/*
-    START STATEMACHINE
-*/
+
 static void on_release(void)
 {
-    // Debounce - check if enough time has passed since last button press
+    // Debounce 
+    // Check if enough time has passed since last button press
     long currentTime = getCurrentTimeMs();
     if (currentTime - lastButtonPressTime < DEBOUNCE_TIMEOUT_MS)
     {
-        return; // Ignore this press (debouncing)
+        return; 
     }
 
     // Update last press time
@@ -96,9 +92,6 @@ struct state states[] = {
         .falling = {&states[1], NULL},
     },
 };
-/*
-    END STATEMACHINE
-*/
 
 struct state *pCurrentState = &states[0];
 
@@ -127,13 +120,13 @@ int BtnStateMachine_getValue()
     return counter;
 }
 
-// We'll keep this for compatibility but it's not used anymore
+
 void BtnStateMachine_setAction(ButtonAction action)
 {
-    (void)action; // Unused parameter
-    // We're using the direct on_release implementation now
+    (void)action;
 }
 
+// Main function to run the state machine
 void BtnStateMachine_doState()
 {
     assert(isInitialized);
@@ -141,16 +134,13 @@ void BtnStateMachine_doState()
     struct gpiod_line_bulk bulkEvents;
     int numEvents = Gpio_waitForLineChange(s_lineBtn, &bulkEvents);
 
-    // Iterate over the events
     for (int i = 0; i < numEvents; i++)
     {
-        // Get the line handle for this event
+        
         struct gpiod_line *line_handle = gpiod_line_bulk_get_line(&bulkEvents, i);
 
-        // Get the number of this line
         unsigned int this_line_number = gpiod_line_offset(line_handle);
 
-        // Get the line event
         struct gpiod_line_event event;
         if (gpiod_line_event_read(line_handle, &event) == -1)
         {
@@ -158,10 +148,8 @@ void BtnStateMachine_doState()
             exit(EXIT_FAILURE);
         }
 
-        // Run the state machine
         bool isRising = event.event_type == GPIOD_LINE_EVENT_RISING_EDGE;
 
-        // Can check which line it is, if you have more than one...
         bool isBtn = this_line_number == GPIO_LINE_NUMBER;
         assert(isBtn);
 
@@ -175,7 +163,6 @@ void BtnStateMachine_doState()
             pStateEvent = &pCurrentState->falling;
         }
 
-        // Do the action
         if (pStateEvent->action != NULL)
         {
             pStateEvent->action();

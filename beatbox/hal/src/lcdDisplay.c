@@ -1,3 +1,5 @@
+// This file is used to display the LCD screen
+// and update the status, audio timing, and accelerometer timing
 #include "hal/lcdDisplay.h"
 #include "DEV_Config.h"
 #include "LCD_1in54.h"
@@ -10,7 +12,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <pthread.h>
-#include <unistd.h> // For sleep
+#include <unistd.h> 
 
 // Display buffer
 static UWORD *s_frameBuffer = NULL;
@@ -42,7 +44,6 @@ void LcdDisplay_init(void)
 
     printf("LCD: Starting initialization...\n");
 
-    // Module initialization
     if (DEV_ModuleInit() != 0)
     {
         fprintf(stderr, "LCD: Module initialization failed\n");
@@ -67,15 +68,12 @@ void LcdDisplay_init(void)
         return;
     }
 
-    // Mark as initialized
     isInitialized = true;
     printf("LCD: Initialization complete\n");
 
-    // Initial display update
     LcdDisplay_updateStatus("ROCK", 80, 120);
 }
 
-// Clean up the LCD display
 void LcdDisplay_cleanup(void)
 {
     if (!isInitialized)
@@ -83,14 +81,12 @@ void LcdDisplay_cleanup(void)
 
     printf("LCD: Cleaning up resources...\n");
 
-    // Free frame buffer
     if (s_frameBuffer != NULL)
     {
         free(s_frameBuffer);
         s_frameBuffer = NULL;
     }
 
-    // Module cleanup
     DEV_ModuleExit();
     isInitialized = false;
     printf("LCD: Cleanup complete\n");
@@ -99,10 +95,8 @@ void LcdDisplay_cleanup(void)
 // Set debug output mode
 void LcdDisplay_setDebug(bool enable)
 {
-    // Prevent unused parameter warning
     (void)enable;
 
-    // No-op in simplified version
 }
 
 // Switch to the next screen (cyclic)
@@ -151,7 +145,6 @@ void LcdDisplay_updateAudioTiming(double min, double max, double avg)
     if (!isInitialized)
         return;
 
-    // Update the audio timing data
     audioMinMs = min;
     audioMaxMs = max;
     audioAvgMs = avg;
@@ -169,7 +162,6 @@ void LcdDisplay_updateAccelTiming(double min, double max, double avg)
     if (!isInitialized)
         return;
 
-    // Update the accelerometer timing data
     accelMinMs = min;
     accelMaxMs = max;
     accelAvgMs = avg;
@@ -184,7 +176,7 @@ void LcdDisplay_updateAccelTiming(double min, double max, double avg)
 // Render the status screen
 static void render_status_screen(void)
 {
-    // Draw the title - move it down from top (was 5)
+    // Draw the title 
     Paint_DrawString_EN(5, 25, "BeatBox - Status", &Font20, BLACK, WHITE);
 
     // Center and draw beat name with larger font
@@ -202,7 +194,7 @@ static void render_status_screen(void)
     Paint_DrawString_EN(5, LCD_1IN54_HEIGHT - 30, volumeStr, &Font16, BLACK, WHITE);
 
     // Draw BPM in bottom right
-    int bpm_width = strlen(bpmStr) * 10; // Wider character width estimate
+    int bpm_width = strlen(bpmStr) * 10;
     int bpm_x = LCD_1IN54_WIDTH - bpm_width - 10;
 
     if (bpm_x < LCD_1IN54_WIDTH / 2 + 10)
@@ -273,11 +265,9 @@ void LcdDisplay_refresh(void)
         break;
 
     default:
-        // Default to status screen
         render_status_screen();
         break;
     }
 
-    // Update the display
     LCD_1IN54_Display(s_frameBuffer);
 }

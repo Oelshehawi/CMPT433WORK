@@ -1,3 +1,5 @@
+// This file is used to handle the drum sounds
+// and load them into memory
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -13,13 +15,10 @@ static wavedata_t drumSounds[DRUM_SOUND_COUNT];
 // Initialize drum sounds
 void DrumSounds_init(void)
 {
-    // Load base drum
     AudioMixer_readWaveFileIntoMemory(DRUM_BASE_PATH, &drumSounds[DRUM_SOUND_BASE]);
 
-    // Load hi-hat
     AudioMixer_readWaveFileIntoMemory(DRUM_HIHAT_PATH, &drumSounds[DRUM_SOUND_HIHAT]);
 
-    // Load snare
     AudioMixer_readWaveFileIntoMemory(DRUM_SNARE_PATH, &drumSounds[DRUM_SOUND_SNARE]);
 
     printf("Drum sounds loaded successfully.\n");
@@ -28,7 +27,6 @@ void DrumSounds_init(void)
 // Cleanup drum sounds
 void DrumSounds_cleanup(void)
 {
-    // Free all drum sound data
     for (int i = 0; i < DRUM_SOUND_COUNT; i++)
     {
         AudioMixer_freeWaveFileData(&drumSounds[i]);

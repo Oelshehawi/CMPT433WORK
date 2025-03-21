@@ -1,3 +1,5 @@
+// Module for managing the LCD display
+// Handles updating the display with current status information
 #include "displayManager.h"
 #include "hal/lcdDisplay.h"
 #include "hal/audioMixer.h"
@@ -8,7 +10,6 @@
 // Initialize the display manager
 void DisplayManager_init(void)
 {
-    // Initialize LCD display
     LcdDisplay_init();
     printf("Display manager initialized\n");
 }

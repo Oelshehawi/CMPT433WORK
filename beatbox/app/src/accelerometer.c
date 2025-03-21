@@ -1,3 +1,5 @@
+// This file is used to handle the accelerometer
+// and read the raw values from the accelerometer
 #include <stdint.h>
 #include <time.h>
 #include <stdlib.h>
@@ -18,7 +20,6 @@ static uint64_t get_time_ms(void)
 
 bool AccelerometerApp_init(void)
 {
-    // Initialize the HAL layer
     if (!Accelerometer_init()) {
         return false;
     }
@@ -32,7 +33,6 @@ void AccelerometerApp_cleanup(void)
 
 void AccelerometerApp_process(void)
 {
-    // Mark the start of accelerometer processing
     Period_markEvent(PERIOD_EVENT_ACCEL);
 
     int16_t x, y, z;
@@ -61,13 +61,13 @@ void AccelerometerApp_process(void)
             if (time_since_last >= DEBOUNCE_TIME_MS) {
                 // Trigger sound based on axis
                 switch (i) {
-                    case 0: // X-axis
+                    case 0: 
                         DrumSounds_play(DRUM_SOUND_BASE);
                         break;
-                    case 1: // Y-axis
+                    case 1: 
                         DrumSounds_play(DRUM_SOUND_SNARE);
                         break;
-                    case 2: // Z-axis
+                    case 2: 
                         DrumSounds_play(DRUM_SOUND_HIHAT);
                         break;
                 }

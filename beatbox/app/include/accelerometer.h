@@ -1,3 +1,5 @@
+// This file is used to handle the accelerometer
+// and read the raw values from the accelerometer
 #ifndef APP_ACCELEROMETER_H
 #define APP_ACCELEROMETER_H
 
@@ -6,13 +8,11 @@
 #include "drumSounds.h"
 #include "periodTimer.h"
 
-// Initialize the accelerometer application
 bool AccelerometerApp_init(void);
 
-// Cleanup the accelerometer application
 void AccelerometerApp_cleanup(void);
 
-// Process accelerometer data and handle application logic
+// Process accelerometer data 
 void AccelerometerApp_process(void);
 
-#endif // APP_ACCELEROMETER_H 
+#endif 

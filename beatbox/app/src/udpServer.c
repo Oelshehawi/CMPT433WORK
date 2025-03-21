@@ -1,3 +1,5 @@
+// UDP Server for BeatBox application
+// Provides remote control functionality via UDP sockets
 #include "udpServer.h"
 #include "beatPlayer.h"
 #include "hal/audioMixer.h"
@@ -27,17 +29,6 @@ static int socketFd = -1;
 // For signal handling
 static struct sigaction old_sa;
 
-// Command formats supported:
-// 1. command,param (comma-separated for test client): volume,80
-// 2. command param (space-separated for web UI): volume 80
-//
-// Supported commands:
-// mode <0-2>: Change the drum-beat mode (0=none, 1=rock, 2=custom)
-// volume <0-100>: Change the volume
-// tempo <40-300>: Change the tempo (BPM)
-// play <0|1|2>: Play the specified drum sound once (0=base, 1=hihat, 2=snare)
-// stop: Shut down the entire application
-
 static void *serverThread(void *arg);
 static void processCommand(const char *command, struct sockaddr_in *clientAddr, socklen_t addrLen);
 
@@ -52,7 +43,7 @@ static void udpSignalHandler(int sig)
             perror("Error restoring original signal handler");
         }
 
-        // Now pass the signal to the original handler
+        // Pass the signal to the original handler
         if (old_sa.sa_handler != SIG_IGN && old_sa.sa_handler != SIG_DFL)
         {
             old_sa.sa_handler(sig);
@@ -68,13 +59,11 @@ static void udpSignalHandler(int sig)
 
 void UdpServer_init(void)
 {
-    // Prevent double initialization
     if (isRunning)
     {
         return;
     }
 
-    // Get the original signal handler
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = udpSignalHandler;
@@ -83,8 +72,6 @@ void UdpServer_init(void)
     {
         perror("Error getting original signal handler");
     }
-
-    // Don't install a new handler - keep using the one in main.c
 
     // Create thread to handle UDP server
     int result = pthread_create(&serverThreadId, NULL, serverThread, NULL);
@@ -153,7 +140,7 @@ static void processCommand(const char *command, struct sockaddr_in *clientAddr, 
 
     if (separator)
     {
-        // Comma-separated format (command,param)
+
         *separator = '\0';
         cmd = cmdCopy;
         param = separator + 1;
@@ -175,26 +162,22 @@ static void processCommand(const char *command, struct sockaddr_in *clientAddr, 
     {
         *p = tolower(*p);
     }
-
+    // Handle mode command
     if (strcmp(cmd, "mode") == 0)
     {
-        // Handle mode with or without parameter
         if (param != NULL && strcmp(param, "null") != 0)
         {
             int mode = atoi(param);
             if (mode >= 0 && mode <= 2)
             {
                 BeatPlayer_setMode(mode);
-                // Just sync the beatPlayer mode; the rotary encoder will get updated via main.c
             }
         }
-        // Always respond with current mode for both queries and settings
         BeatMode_t currentMode = BeatPlayer_getMode();
         snprintf(response, MAX_BUFFER_SIZE, "%d", currentMode);
     }
     else if (strcmp(cmd, "volume") == 0)
     {
-        // Handle volume with or without parameter
         if (param != NULL && strcmp(param, "null") != 0)
         {
             int volume = atoi(param);
@@ -203,24 +186,20 @@ static void processCommand(const char *command, struct sockaddr_in *clientAddr, 
                 AudioMixer_setVolume(volume);
             }
         }
-        // Always respond with current volume for both queries and settings
         int currentVolume = AudioMixer_getVolume();
         snprintf(response, MAX_BUFFER_SIZE, "%d", currentVolume);
     }
     else if (strcmp(cmd, "tempo") == 0)
     {
-        // Handle tempo with or without parameter
         if (param != NULL && strcmp(param, "null") != 0)
         {
             int tempo = atoi(param);
             if (tempo >= 40 && tempo <= 300)
             {
                 BeatPlayer_setTempo(tempo);
-                // Also update the rotary encoder to maintain consistency
                 RotaryEncoder_setBPM(tempo);
             }
         }
-        // Always respond with current tempo for both queries and settings
         int currentTempo = BeatPlayer_getTempo();
         snprintf(response, MAX_BUFFER_SIZE, "%d", currentTempo);
     }
@@ -254,12 +233,10 @@ static void processCommand(const char *command, struct sockaddr_in *clientAddr, 
     }
     else if (strcmp(cmd, "STOP") == 0)
     {
-        // Internal command to unblock recvfrom
         return;
     }
     else
     {
-        // Limit the command length in the error message to avoid buffer overflow
         char cmdShort[20];
         strncpy(cmdShort, cmd, sizeof(cmdShort) - 1);
         cmdShort[sizeof(cmdShort) - 1] = '\0';
@@ -316,7 +293,6 @@ static void *serverThread(void *arg)
     // Main receive loop
     while (isRunning)
     {
-        // Receive data
         memset(&clientAddr, 0, sizeof(clientAddr));
         addrLen = sizeof(clientAddr);
 
@@ -325,7 +301,7 @@ static void *serverThread(void *arg)
 
         if (!isRunning)
         {
-            break; // Exit if we've been asked to stop
+            break;
         }
 
         if (numBytes < 0)

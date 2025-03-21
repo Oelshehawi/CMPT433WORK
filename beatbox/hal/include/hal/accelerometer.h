@@ -1,3 +1,5 @@
+// This file is used to handle the accelerometer
+// and read the raw values from the accelerometer
 #ifndef HAL_ACCELEROMETER_H
 #define HAL_ACCELEROMETER_H
 
@@ -13,4 +15,4 @@ void Accelerometer_cleanup(void);
 // Read raw accelerometer values
 bool Accelerometer_readRaw(int16_t* x, int16_t* y, int16_t* z);
 
-#endif // HAL_ACCELEROMETER_H 
+#endif 
