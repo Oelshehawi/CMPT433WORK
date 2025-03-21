@@ -159,5 +159,3 @@ void TerminalDisplay_markAccelerometerEvent(void)
 {
     Period_markEvent(PERIOD_EVENT_ACCEL);
 }
-
-// The joystick processing has been moved to main.c

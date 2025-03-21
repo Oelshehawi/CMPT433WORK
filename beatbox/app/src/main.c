@@ -16,6 +16,7 @@
 #include "inputHandler.h"
 #include "displayManager.h"
 #include "udpServer.h"
+#include "accelerometer.h"
 
 // Flag to indicate if the application should continue running
 volatile bool isRunning = true;
@@ -66,6 +67,9 @@ int main(void)
     // Initialize the button state machine and rotary encoder
     BtnStateMachine_init();
     RotaryEncoder_init();
+
+    // Initialize accelerometer
+    AccelerometerApp_init();
 
     // Default mode and settings
     BeatPlayer_setMode(BEAT_MODE_ROCK);
@@ -133,9 +137,10 @@ int main(void)
         // Remember last encoder mode for detecting changes
         lastEncoderMode = encoderMode;
 
-        // Update BPM from rotary encoder
+        // Process all input devices
         int encoderBPM = RotaryEncoder_getBPM();
         BeatPlayer_setTempo(encoderBPM);
+        AccelerometerApp_process();
 
         // Update display every second
         if (elapsedMs >= 1000)
@@ -174,6 +179,7 @@ int main(void)
     BeatPlayer_cleanup();
     DrumSounds_cleanup();
     AudioMixer_cleanup();
+    AccelerometerApp_cleanup();
     Gpio_cleanup();
 
     // Reset the terminal
