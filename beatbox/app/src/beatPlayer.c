@@ -1,3 +1,4 @@
+// Handles playing different drum beat patterns
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -8,10 +9,8 @@
 #include "beatPlayer.h"
 #include "drumSounds.h"
 
-// Current beat mode
 static BeatMode_t currentMode = BEAT_MODE_NONE;
 
-// Current tempo in BPM
 static int currentBPM = DEFAULT_BPM;
 
 // Thread for playing the beat
@@ -103,7 +102,6 @@ bool BeatPlayer_setMode(BeatMode_t newMode)
 // Get the current beat mode
 BeatMode_t BeatPlayer_getMode(void)
 {
-    // No need for mutex since reading an enum is atomic
     return currentMode;
 }
 
@@ -125,21 +123,19 @@ bool BeatPlayer_setTempo(int newBPM)
 // Get the current tempo
 int BeatPlayer_getTempo(void)
 {
-    // No need for mutex since reading an int is atomic
     return currentBPM;
 }
 
 // Check if the beat player is currently playing
 bool BeatPlayer_isPlaying(void)
 {
-    // No need for mutex since reading a bool is atomic
     return isRunning;
 }
 
 // Thread function for playing the beat
 static void *beatThread(void *arg)
 {
-    (void)arg; // Unused parameter
+    (void)arg; 
 
     int beatCount = 0;
 
@@ -154,7 +150,7 @@ static void *beatThread(void *arg)
 
         if (!shouldRun)
         {
-            usleep(100000); // Sleep for 100ms when not running
+            usleep(100000); 
             continue;
         }
 
@@ -162,7 +158,6 @@ static void *beatThread(void *arg)
         switch (mode)
         {
         case BEAT_MODE_NONE:
-            // No beat to play
             break;
 
         case BEAT_MODE_ROCK:
@@ -174,7 +169,6 @@ static void *beatThread(void *arg)
             break;
 
         default:
-            // Unknown mode, do nothing
             break;
         }
 
@@ -182,9 +176,9 @@ static void *beatThread(void *arg)
         long long sleepTimeMs = calculateHalfBeatTimeMs(bpm);
 
         // Sleep for half a beat
-        usleep(sleepTimeMs * 1000); // Convert to microseconds
+        usleep(sleepTimeMs * 1000); 
 
-        // Increment beat count (modulo 8 for a 4-beat pattern)
+        // Increment beat count 
         beatCount = (beatCount + 1) % 8;
     }
 
@@ -194,54 +188,42 @@ static void *beatThread(void *arg)
 // Play the standard rock beat pattern
 static void playRockBeat(int beatCount)
 {
-    /*
-    Rock Beat Pattern:
-    Beat | Base | Snare | Hi-Hat
-    1     X               X
-    1.5                   X
-    2           X         X
-    2.5                   X
-    3     X               X
-    3.5                   X
-    4           X         X
-    4.5                   X
-    */
 
     switch (beatCount)
     {
-    case 0: // Beat 1
+    case 0: 
         DrumSounds_play(DRUM_SOUND_BASE);
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 1: // Beat 1.5
+    case 1: 
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 2: // Beat 2
+    case 2: 
         DrumSounds_play(DRUM_SOUND_SNARE);
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 3: // Beat 2.5
+    case 3: 
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 4: // Beat 3
+    case 4: 
         DrumSounds_play(DRUM_SOUND_BASE);
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 5: // Beat 3.5
+    case 5: 
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 6: // Beat 4
+    case 6:
         DrumSounds_play(DRUM_SOUND_SNARE);
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 7: // Beat 4.5
+    case 7: 
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
     }
@@ -250,52 +232,39 @@ static void playRockBeat(int beatCount)
 // Play a custom beat pattern (different from the rock beat)
 static void playCustomBeat(int beatCount)
 {
-    /*
-    Custom Beat Pattern (just an example):
-    Beat | Base | Snare | Hi-Hat
-    1     X      X
-    1.5
-    2                    X
-    2.5          X
-    3     X
-    3.5                  X
-    4           X        X
-    4.5    X
-    */
 
     switch (beatCount)
     {
-    case 0: // Beat 1
+    case 0: 
         DrumSounds_play(DRUM_SOUND_BASE);
         DrumSounds_play(DRUM_SOUND_SNARE);
         break;
 
-    case 1: // Beat 1.5
-        // Silent
+    case 1: 
         break;
 
-    case 2: // Beat 2
+    case 2: 
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 3: // Beat 2.5
+    case 3: 
         DrumSounds_play(DRUM_SOUND_SNARE);
         break;
 
-    case 4: // Beat 3
+    case 4: 
         DrumSounds_play(DRUM_SOUND_BASE);
         break;
 
-    case 5: // Beat 3.5
+    case 5: 
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 6: // Beat 4
+    case 6: 
         DrumSounds_play(DRUM_SOUND_SNARE);
         DrumSounds_play(DRUM_SOUND_HIHAT);
         break;
 
-    case 7: // Beat 4.5
+    case 7: 
         DrumSounds_play(DRUM_SOUND_BASE);
         break;
     }

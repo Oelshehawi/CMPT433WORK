@@ -1,3 +1,5 @@
+// This file is used to handle the rotary encoder
+// and button press for the beatbox
 #include "hal/rotaryEncoder.h"
 #include "hal/buttonStateMachine.h"
 #include "hal/gpio.h"
@@ -22,7 +24,7 @@
 #define MIN_BPM 40
 #define MAX_BPM 300
 #define BPM_CHANGE_AMOUNT 5
-#define DEBOUNCE_TIME_MS 150 // Debounce time in milliseconds
+#define DEBOUNCE_TIME_MS 150 
 
 // This is now shared with buttonStateMachine.c
 BeatMode_t currentBeatMode = BEAT_MODE_ROCK;
@@ -40,7 +42,6 @@ static long lastEncoderChangeTime = 0;
 static struct GpioLine *clk_gpio = NULL;
 static struct GpioLine *dt_gpio = NULL;
 
-// Function to get current time in milliseconds
 static long getCurrentTimeMs()
 {
     struct timespec ts;
@@ -51,7 +52,7 @@ static long getCurrentTimeMs()
 // Thread function just for rotary encoder rotation
 static void *encoder_rotation_thread_function(void *arg)
 {
-    (void)arg; // Prevent unused parameter warning
+    (void)arg; 
 
     // Create the event monitoring structures
     struct gpiod_line_bulk encoderBulk;
@@ -70,7 +71,6 @@ static void *encoder_rotation_thread_function(void *arg)
         return NULL;
     }
 
-    // Pattern tracking
     int clk_last_state = -1;
     int dt_last_state = -1;
     bool first_reading = true;
@@ -81,8 +81,7 @@ static void *encoder_rotation_thread_function(void *arg)
         int result = gpiod_line_event_wait_bulk(&encoderBulk, NULL, &encoderEvents);
         if (result <= 0)
         {
-            // No events or error, short sleep to avoid CPU hogging
-            usleep(5000); // 5ms
+            usleep(5000); 
             continue;
         }
 
@@ -96,14 +95,13 @@ static void *encoder_rotation_thread_function(void *arg)
 
             if (gpiod_line_event_read(line, &event) != 0)
             {
-                continue; // Error reading event
+                continue; 
             }
 
             // Only care about CLK and DT lines for rotation detection
             bool is_clk = (line_offset == CLK_GPIO_LINE);
             bool is_rising = (event.event_type == GPIOD_LINE_EVENT_RISING_EDGE);
 
-            // Update the state for this line
             if (is_clk)
             {
                 clk_last_state = is_rising ? 1 : 0;
@@ -113,7 +111,6 @@ static void *encoder_rotation_thread_function(void *arg)
                 dt_last_state = is_rising ? 1 : 0;
             }
 
-            // Skip first reading to initialize states
             if (first_reading)
             {
                 first_reading = false;
@@ -124,17 +121,16 @@ static void *encoder_rotation_thread_function(void *arg)
             long currentTime = getCurrentTimeMs();
             if (currentTime - lastEncoderChangeTime < DEBOUNCE_TIME_MS)
             {
-                continue; // Skip this event (debouncing)
+                continue; 
             }
 
             // Detect rotation direction based on the sequence pattern
             // For clockwise: CLK falls before DT
             // For counter-clockwise: DT falls before CLK
             if (is_clk && !is_rising)
-            { // CLK falling edge
+            { 
                 if (dt_last_state == 1)
-                { // DT is high = clockwise
-                    // Increase BPM
+                { 
                     pthread_mutex_lock(&mutex);
                     currentBPM += BPM_CHANGE_AMOUNT;
                     if (currentBPM > MAX_BPM)
@@ -147,10 +143,9 @@ static void *encoder_rotation_thread_function(void *arg)
                 }
             }
             else if (!is_clk && !is_rising)
-            { // DT falling edge
+            { 
                 if (clk_last_state == 1)
-                { // CLK is high = counter-clockwise
-                    // Decrease BPM
+                { 
                     pthread_mutex_lock(&mutex);
                     currentBPM -= BPM_CHANGE_AMOUNT;
                     if (currentBPM < MIN_BPM)
@@ -168,19 +163,16 @@ static void *encoder_rotation_thread_function(void *arg)
     return NULL;
 }
 
-// Thread function just for button press (mode changes)
+// Thread function for button press (mode changes)
 static void *button_thread_function(void *arg)
 {
-    (void)arg; // Prevent unused parameter warning
+    (void)arg; 
 
-    // Let the buttonStateMachine handle the button presses separately
     while (keep_running)
     {
-        // Process button events for mode change
         BtnStateMachine_doState();
 
-        // Short sleep to reduce CPU usage
-        usleep(5000); // 5ms
+        usleep(5000); 
     }
 
     return NULL;
@@ -203,17 +195,14 @@ void RotaryEncoder_init(void)
     currentBPM = DEFAULT_BPM;
     lastEncoderChangeTime = getCurrentTimeMs();
 
-    // Start the threads
     keep_running = true;
 
-    // Start button thread
     if (pthread_create(&button_thread, NULL, button_thread_function, NULL) != 0)
     {
         perror("Failed to create button thread");
         exit(1);
     }
 
-    // Start encoder thread
     if (pthread_create(&encoder_thread, NULL, encoder_rotation_thread_function, NULL) != 0)
     {
         perror("Failed to create encoder thread");
@@ -228,11 +217,9 @@ void RotaryEncoder_cleanup(void)
     if (!is_initialized)
         return;
 
-    // Stop the threads
     keep_running = false;
 
-    // Give the threads a chance to clean up
-    usleep(100000); // 100ms
+    usleep(100000); 
 
     // Join the threads to ensure they're fully stopped
     pthread_join(encoder_thread, NULL);
@@ -256,7 +243,7 @@ void RotaryEncoder_cleanup(void)
 
 int RotaryEncoder_process(void)
 {
-    return 0; // Not used anymore
+    return 0; 
 }
 
 // Get current beat mode

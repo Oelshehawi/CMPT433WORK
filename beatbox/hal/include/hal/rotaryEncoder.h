@@ -1,3 +1,5 @@
+// This file is used to handle the rotary encoder
+// and button press for the beatbox
 #ifndef _ROTARY_ENCODER_H_
 #define _ROTARY_ENCODER_H_
 
@@ -14,4 +16,4 @@ BeatMode_t RotaryEncoder_getBeatMode(void);
 int RotaryEncoder_getBPM(void);
 void RotaryEncoder_setBPM(int bpm);
 
-#endif // _ROTARY_ENCODER_H_
+#endif 

@@ -1,3 +1,5 @@
+// Module for handling periodic display updates on the console
+// Manages timing statistics and handles the periodical output of system status
 #include "terminalDisplay.h"
 #include "periodTimer.h"
 #include "hal/audioMixer.h"
@@ -16,9 +18,8 @@
 
 // Thread variables
 static pthread_t displayThreadId;
-static volatile bool isRunning = false;      // Make volatile for visibility between threads
-static volatile bool isShuttingDown = false; // Additional flag for app-wide shutdown
-
+static volatile bool isRunning = false;     
+static volatile bool isShuttingDown = false; 
 // Private function declarations
 static void *displayThread(void *arg);
 static void updateConsoleOutput(void);
@@ -32,7 +33,6 @@ void TerminalDisplay_registerShutdown(volatile bool *appIsRunning)
 // Display thread function
 static void *displayThread(void *arg)
 {
-    // Prevent unused parameter warning
     (void)arg;
 
     // Thread timing variables
@@ -41,7 +41,6 @@ static void *displayThread(void *arg)
 
     while (isRunning && !isShuttingDown)
     {
-        // Get current time
         struct timespec currentTime;
         clock_gettime(CLOCK_MONOTONIC, &currentTime);
 
@@ -56,11 +55,9 @@ static void *displayThread(void *arg)
             lastConsoleUpdate = currentTime;
         }
 
-        // Sleep to avoid consuming too much CPU
-        usleep(10000); // 10ms
+        usleep(10000);
     }
 
-    // Clean up
     Period_cleanup();
 
     printf("Terminal display thread exited\n");
@@ -70,7 +67,6 @@ static void *displayThread(void *arg)
 // Update the console with periodic statistics
 static void updateConsoleOutput(void)
 {
-    // Check for shutdown again before printing anything
     if (isShuttingDown)
     {
         return;
@@ -110,11 +106,9 @@ static void updateConsoleOutput(void)
     fflush(stdout);
 }
 
-// Public functions
 
 void TerminalDisplay_init(void)
 {
-    // Create display thread
     isRunning = true;
     isShuttingDown = false;
     pthread_create(&displayThreadId, NULL, displayThread, NULL);
@@ -126,14 +120,12 @@ void TerminalDisplay_cleanup(void)
 {
     printf("Terminal display cleanup starting...\n");
 
-    // Stop display thread
     if (isRunning)
     {
         isRunning = false;
         isShuttingDown = true;
 
-        // Give thread a chance to notice the shutdown
-        usleep(50000); // 50ms
+        usleep(50000); 
 
         // Join with standard pthread_join
         int join_result = pthread_join(displayThreadId, NULL);

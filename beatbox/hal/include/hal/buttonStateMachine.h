@@ -1,3 +1,5 @@
+// This file is used to handle the state machine 
+// for the rotary encoder button press
 #ifndef _BTN_STATEMACHINE_H_
 #define _BTN_STATEMACHINE_H_
 

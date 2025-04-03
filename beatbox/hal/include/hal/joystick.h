@@ -1,3 +1,5 @@
+// This file is used to handle the joystick
+// and read the raw values from the joystick
 #ifndef _JOYSTICK_H_
 #define _JOYSTICK_H_
 
