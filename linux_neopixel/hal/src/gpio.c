@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <gpiod.h>
 #include <assert.h>
+#include <time.h>
 
 // Relies on the gpiod library.
 // Insallation for cross compiling:
@@ -114,11 +115,23 @@ int Gpio_waitForLineChange(
     gpiod_line_bulk_init(&bulkWait);
     gpiod_line_bulk_add(&bulkWait, (struct gpiod_line *)line1);
 
+    // Set timeout to 100ms to ensure we don't block indefinitely
+    struct timespec timeout = {
+        .tv_sec = 0,
+        .tv_nsec = 100 * 1000 * 1000 // 100ms
+    };
+
     // The line is already configured for events, so just wait
-    int result = gpiod_line_event_wait_bulk(&bulkWait, NULL, bulkEvents);
+    int result = gpiod_line_event_wait_bulk(&bulkWait, &timeout, bulkEvents);
     if (result == -1)
     {
         perror("Error waiting on lines for event waiting");
+        return 0;
+    }
+
+    // If result is 0, it's a timeout (no events)
+    if (result == 0)
+    {
         return 0;
     }
 

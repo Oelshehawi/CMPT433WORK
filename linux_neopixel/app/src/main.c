@@ -11,6 +11,7 @@
 #include "hal/gpio.h"
 #include "hal/accelerometer.h"
 #include "hal/firing_input.h"
+#include "hal/shutdown_input.h"
 #include "lcd_display_impl.h"
 #include "target_game.h"
 #include "memory_handler.h"
@@ -109,7 +110,6 @@ int main()
         Gpio_cleanup();
         return EXIT_FAILURE;
     }
-    printf("Accelerometer initialized successfully\n");
 
     // Initialize firing input (button)
     if (!FiringInput_init())
@@ -120,12 +120,23 @@ int main()
         Gpio_cleanup();
         return EXIT_FAILURE;
     }
-    printf("Firing input initialized successfully\n");
+
+    // Initialize shutdown input (joystick center button)
+    if (!ShutdownInput_init())
+    {
+        printf("Failed to initialize shutdown input. Exiting.\n");
+        FiringInput_cleanup();
+        Accelerometer_cleanup();
+        LcdDisplayImpl_cleanup();
+        Gpio_cleanup();
+        return EXIT_FAILURE;
+    }
 
     // Initialize shared memory
     if (!MemoryHandler_init())
     {
         printf("Failed to setup shared memory. Exiting.\n");
+        ShutdownInput_cleanup();
         FiringInput_cleanup();
         Accelerometer_cleanup();
         LcdDisplayImpl_cleanup();
@@ -151,16 +162,19 @@ int main()
         // Get current time
         unsigned long currentTime = getCurrentTimeMs();
 
+        // Check if shutdown was requested via joystick button
+        if (ShutdownInput_isShutdownRequested())
+        {
+            printf("Shutdown requested via joystick press.\n");
+            should_exit = true; // Signal loop to terminate
+        }
+
         // Read accelerometer data
         int16_t rawX, rawY, rawZ;
         float pointingX = 0.0f, pointingY = 0.0f;
 
         Accelerometer_readRaw(&rawX, &rawY, &rawZ);
 
-        // --- Process Accelerometer Data ---
-        // Mapping based on experiment:
-        // Pointing X (Left/Right) corresponds to raw Y
-        // Pointing Y (Down/Up) corresponds to NEGATED raw X
         const float SCALING_FACTOR = 16384.0f; // Adjust if needed!
 
         pointingX = (float)rawY / SCALING_FACTOR;  // Left/Right uses rawY
@@ -222,11 +236,18 @@ int main()
 
     printf("Starting cleanup...\n");
 
-    printf("Stopping LCD display...\n");
-    LcdDisplayImpl_cleanup();
+    // Turn off NeoPixels before cleaning up shared memory
+    printf("Turning off NeoPixels...\n");
+    uint32_t off_colors[NEO_NUM_LEDS] = {0}; // Array of zeros
+    MemoryHandler_writeColors(off_colors, NEO_NUM_LEDS);
+    usleep(50000); // Give R5 time to process the 'off' frame (50ms)
 
+    // Clean up in reverse order of initialization
     printf("Cleaning up shared memory...\n");
     MemoryHandler_cleanup();
+
+    printf("Stopping shutdown input...\n");
+    ShutdownInput_cleanup();
 
     printf("Stopping firing input...\n");
     FiringInput_cleanup();
@@ -234,6 +255,10 @@ int main()
     printf("Stopping accelerometer...\n");
     Accelerometer_cleanup();
 
+    printf("Stopping LCD display...\n");
+    LcdDisplayImpl_cleanup();
+
+    // Clean up GPIO last
     printf("Stopping GPIO...\n");
     Gpio_cleanup();
 

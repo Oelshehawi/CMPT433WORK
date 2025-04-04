@@ -19,9 +19,8 @@ static AnimationState_t currentAnimation = ANIM_NONE;
 static unsigned long animationStartTime = 0;
 static unsigned int animationFrame = 0;
 
-// Animation durations (3x longer than before)
-#define HIT_ANIM_DURATION_MS 2400  // Was 800ms
-#define MISS_ANIM_DURATION_MS 1200 // Was 400ms
+#define HIT_ANIM_DURATION_MS 500  // Time for hit animation to complete
+#define MISS_ANIM_DURATION_MS 500 // Time for miss animation to complete
 #define ANIMATION_FRAME_INTERVAL_MS 50
 
 // LED color constants (GRB format)
@@ -32,9 +31,9 @@ static const uint32_t COLOR_ORANGE_BRIGHT = 0x60FF0000; // Orange (G=60, R=FF, B
 static const uint32_t COLOR_YELLOW_BRIGHT = 0xFFFF0000; // Yellow (G=FF, R=FF, B=00)
 static const uint32_t COLOR_WHITE_BRIGHT = 0xFFFFFF00;  // White (G=FF, R=FF, B=FF)
 static const uint32_t COLOR_OFF = 0x00000000;           // Off
-static const uint32_t COLOR_RED_DIM = 0x00400000;       // Dimmer Red
-static const uint32_t COLOR_GREEN_DIM = 0x40000000;     // Dimmer Green
-static const uint32_t COLOR_BLUE_DIM = 0x00004000;      // Dimmer Blue
+static const uint32_t COLOR_RED_DIM = 0x00100000;       // Dimmer Red (was 0x00400000)
+static const uint32_t COLOR_GREEN_DIM = 0x10000000;     // Dimmer Green (was 0x40000000)
+static const uint32_t COLOR_BLUE_DIM = 0x00001000;      // Dimmer Blue (was 0x00004000)
 
 // Thresholds for vertical zones (Adjust these based on testing!)
 static const float T1 = 0.1f;  // On target threshold
@@ -43,7 +42,6 @@ static const float T3 = 0.35f; // Threshold between state 2 & 3
 static const float T4 = 0.55f; // Threshold between state 3 & 4
 static const float T5 = 0.75f; // Threshold between state 4 & 5 (furthest)
 
-// Helper function to get current time in milliseconds
 static unsigned long getCurrentTimeMs(void)
 {
     struct timespec ts;
@@ -51,7 +49,6 @@ static unsigned long getCurrentTimeMs(void)
     return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
 }
 
-// Initialize the target game
 void TargetGame_init(void)
 {
     // Seed random number generator
@@ -243,7 +240,7 @@ bool TargetGame_processPointing(float pointingX, float pointingY, uint32_t *outp
                 outputColors[centerLed - 1] = baseColorDim;
             if (centerLed < numLeds - 1)
                 outputColors[centerLed + 1] = baseColorDim;
-        } // Add simpler cases if needed
+        }
     }
     // If none of the above, LEDs remain off
 
