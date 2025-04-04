@@ -10,6 +10,7 @@
 #include "sharedDataLayout.h"
 #include "hal/gpio.h"
 #include "hal/accelerometer.h"
+#include "hal/firing_input.h"
 #include "lcd_display_impl.h"
 #include "target_game.h"
 #include "memory_handler.h"
@@ -20,6 +21,9 @@
 // Signal handler control
 static volatile bool should_exit = false;
 
+// Last time the LCD was updated
+static unsigned long lastLcdUpdateTime = 0;
+
 // Signal handler for clean exit
 void handle_signal(int sig)
 {
@@ -27,19 +31,62 @@ void handle_signal(int sig)
     should_exit = true;
 }
 
+// Helper function to format time as MM:SS
+static void formatTime(unsigned long timeMs, char *buffer, size_t bufferSize)
+{
+    unsigned long totalSeconds = timeMs / 1000;
+    unsigned int minutes = totalSeconds / 60;
+    unsigned int seconds = totalSeconds % 60;
+
+    if (minutes < 60)
+    {
+        // Format as MM:SS
+        snprintf(buffer, bufferSize, "%02u:%02u", minutes, seconds);
+    }
+    else
+    {
+        // Format as HH:MM:SS for longer durations
+        unsigned int hours = minutes / 60;
+        minutes %= 60;
+        snprintf(buffer, bufferSize, "%u:%02u:%02u", hours, minutes, seconds);
+    }
+}
+
+// Helper function to get current time in milliseconds
+static unsigned long getCurrentTimeMs(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+}
+
 // Helper function to update the LCD with current status
 static void update_display(void)
 {
-    // For now, just display a static message
     char buff[MAX_LCD_MESSAGE];
+    char timeStr[20];
+    int hits, misses;
+    unsigned long runTimeMs;
+
+    // Get current game stats
+    TargetGame_getStats(&hits, &misses, &runTimeMs);
+
+    // Format the runtime
+    formatTime(runTimeMs, timeStr, sizeof(timeStr));
+
+    // Format the LCD message
     snprintf(buff, MAX_LCD_MESSAGE,
              "%s\n"
              "Find the Dot Game\n"
-             "Tilt to aim!\n"
-             "Running...",
-             NAME);
+             "Hits:%d Misses:%d\n"
+             "Time: %s",
+             NAME, hits, misses, timeStr);
 
+    // Update the display
     LcdDisplayImpl_update(buff);
+
+    // Remember when we last updated the LCD
+    lastLcdUpdateTime = getCurrentTimeMs();
 }
 
 int main()
@@ -64,10 +111,22 @@ int main()
     }
     printf("Accelerometer initialized successfully\n");
 
+    // Initialize firing input (button)
+    if (!FiringInput_init())
+    {
+        printf("Failed to initialize firing input. Exiting.\n");
+        Accelerometer_cleanup();
+        LcdDisplayImpl_cleanup();
+        Gpio_cleanup();
+        return EXIT_FAILURE;
+    }
+    printf("Firing input initialized successfully\n");
+
     // Initialize shared memory
     if (!MemoryHandler_init())
     {
         printf("Failed to setup shared memory. Exiting.\n");
+        FiringInput_cleanup();
         Accelerometer_cleanup();
         LcdDisplayImpl_cleanup();
         Gpio_cleanup();
@@ -80,12 +139,18 @@ int main()
     printf("Game initialized. Find the target!\n");
     printf("Press Ctrl+C to exit\n");
 
+    // Initialize LCD update time
+    lastLcdUpdateTime = getCurrentTimeMs();
+
     // Set initial delay
-    uint32_t delay_ms = 50; // 50ms delay for more responsive controls
+    uint32_t delay_ms = 20; // 20ms delay for more responsive controls and animations
 
     // Main loop
     while (!should_exit)
     {
+        // Get current time
+        unsigned long currentTime = getCurrentTimeMs();
+
         // Read accelerometer data
         int16_t rawX, rawY, rawZ;
         float pointingX = 0.0f, pointingY = 0.0f;
@@ -111,27 +176,45 @@ int main()
         if (pointingY < -1.0f)
             pointingY = -1.0f;
 
-        // Debug print
-        printf("Pointing: X=%.2f, Y=%.2f (Raw: X=%d, Y=%d, Z=%d)\n",
-               pointingX, pointingY, rawX, rawY, rawZ);
+        // Debug print (less frequently to reduce console spam)
+        static int debugCounter = 0;
+        if (debugCounter++ % 50 == 0)
+        { // Print only every 50th iteration
+            printf("Pointing: X=%.2f, Y=%.2f (Raw: X=%d, Y=%d, Z=%d)\n",
+                   pointingX, pointingY, rawX, rawY, rawZ);
+        }
 
-        // Process pointing data and update LEDs
+        // Create buffer for LED colors
         uint32_t output_colors[NEO_NUM_LEDS] = {0};
-        bool targetHit = TargetGame_processPointing(pointingX, pointingY, output_colors, NEO_NUM_LEDS);
+
+        // Track if we need to update the LCD immediately
+        bool needLcdUpdate = false;
+
+        // Check if button was pressed (firing input)
+        if (FiringInput_wasButtonPressed())
+        {
+            // Process the firing action
+            TargetGame_fire(pointingX, pointingY);
+            needLcdUpdate = true; // Update LCD immediately on hit/miss
+        }
+
+        // First try to update animations
+        bool animationActive = TargetGame_updateAnimations(output_colors, NEO_NUM_LEDS);
+
+        // If no animation is active, process regular pointing
+        if (!animationActive)
+        {
+            TargetGame_processPointing(pointingX, pointingY, output_colors, NEO_NUM_LEDS);
+        }
 
         // Write the colors to shared memory
         MemoryHandler_writeColors(output_colors, NEO_NUM_LEDS);
 
-        // If target hit, generate a new target after a short delay
-        if (targetHit)
+        // Update the display if needed (on event or every second)
+        if (needLcdUpdate || (currentTime - lastLcdUpdateTime >= 1000))
         {
-            printf("Target hit! Generating new target...\n");
-            usleep(1000000); // 1 second delay to celebrate
-            TargetGame_generateNewTarget();
+            update_display();
         }
-
-        // Update the display
-        update_display();
 
         // Sleep for the specified delay
         usleep(delay_ms * 1000);
@@ -144,6 +227,9 @@ int main()
 
     printf("Cleaning up shared memory...\n");
     MemoryHandler_cleanup();
+
+    printf("Stopping firing input...\n");
+    FiringInput_cleanup();
 
     printf("Stopping accelerometer...\n");
     Accelerometer_cleanup();

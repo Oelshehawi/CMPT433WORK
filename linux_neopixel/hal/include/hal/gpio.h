@@ -1,14 +1,39 @@
-#ifndef HAL_GPIO_H
-#define HAL_GPIO_H
+// Low-level GPIO access using gpiod
+#ifndef _GPIO_H_
+#define _GPIO_H_
 
-/**
- * Initialize the GPIO module.
- */
+#include <stdbool.h>
+#include <stdint.h>
+
+// Opaque struct to hide the gpiod dependency
+// Passes a ptr to struct gpiod_line* around without exposing it to clients
+typedef void GpioLine;
+
+// We'll need the bulk structure still
+// This does expose gpiod library indirectly, which is not great
+#include <gpiod.h>
+
+enum eGpioChips
+{
+    GPIO_CHIP_0 = 0,
+    GPIO_CHIP_1,
+    GPIO_CHIP_2,
+    GPIO_NUM_CHIPS,
+};
+
+// Must initialize before calling any other functions.
 void Gpio_initialize(void);
-
-/**
- * Clean up resources used by the GPIO module.
- */
 void Gpio_cleanup(void);
 
-#endif // HAL_GPIO_H 
+// Opening a pin gives us a "line" that we later work with.
+//  chip: such as GPIO_CHIP_0
+//  pinNumber: such as 15
+struct GpioLine *Gpio_openForEvents(enum eGpioChips chip, int pinNumber);
+
+int Gpio_waitForLineChange(
+    struct GpioLine *line1,
+    struct gpiod_line_bulk *bulkEvents);
+
+void Gpio_close(struct GpioLine *line);
+
+#endif
