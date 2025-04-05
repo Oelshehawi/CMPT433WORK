@@ -154,7 +154,7 @@ int main()
     lastLcdUpdateTime = getCurrentTimeMs();
 
     // Set initial delay
-    uint32_t delay_ms = 20; // 20ms delay for more responsive controls and animations
+    uint32_t delay_ms = 20; 
 
     // Main loop
     while (!should_exit)
@@ -166,7 +166,7 @@ int main()
         if (ShutdownInput_isShutdownRequested())
         {
             printf("Shutdown requested via joystick press.\n");
-            should_exit = true; // Signal loop to terminate
+            should_exit = true;
         }
 
         // Read accelerometer data
@@ -190,7 +190,7 @@ int main()
         if (pointingY < -1.0f)
             pointingY = -1.0f;
 
-        // Debug print (less frequently to reduce console spam)
+        // Debug print
         static int debugCounter = 0;
         if (debugCounter++ % 50 == 0)
         { // Print only every 50th iteration
